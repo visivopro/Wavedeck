@@ -31,6 +31,7 @@ A free, classic-style music player for Windows. It's a FLAC and MP3 player first
 - Loads classic Winamp 2.x skins (`.wsz`), so thousands of existing skins work. Drag one onto the player to apply it.
 - Also loads **modern skins**: Winamp 5 / Winamp3 freeform skins (`.wal`), plus Windows Media Player (`.wmz`), Sonique (`.sgf`), K-Jofol (`.kjofol`), Audion (`.face`), Cowon (`.uib`) and JetAudio (`.jsk`) skins. They float on the desktop in their own shapes, their scripts run, and they control Wavedeck's playback, EQ, playlist and visualizer, so the library, Browse tab, mixtapes and server streaming keep working. Pick *Back to classic skin* in the Skins menu to return. Powered by the open-source Webamp Modern engine.
 - Wavedeck's own `.wdskin` format: same sprite-sheet layout, but PNG with transparency, plus `skin.json` metadata and an optional `library.css` that themes the Media Library.
+- Where to find skins: the [Winamp Skin Museum](https://skins.webamp.org/) by Jordan Eldredge (classic `.wsz`) and [WinCustomize](https://www.wincustomize.com/explore/winamp) by Stardock (classic and modern `.wal`). Download one and drop it on the player.
 - Options → Skins → *Export skin template* writes the built-in skin as a ready-to-edit `.wdskin`. See [docs/SKINS.md](docs/SKINS.md).
 
 **Browse tab and Mixtapes**

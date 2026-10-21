@@ -203,6 +203,16 @@ footer a { margin: 0 .6rem; }
 .skin.big img { width: 520px; }
 .skin figcaption { font-size: .85rem; color: #93a0b8; text-align: center; }
 .skin figcaption b { color: #e6ebf5; font-weight: 650; }
+.find { margin: 2.5rem auto 0; max-width: 52rem; }
+.find h3 { font-variation-settings: "wdth" 125; font-weight: 800; font-size: 1.35rem; margin: 0 0 1rem; }
+.find ul { list-style: none; padding: 0; margin: 0 0 1rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; }
+.find li { background: var(--alu-hi); border: 1px solid var(--alu-lo); border-radius: 12px; padding: 1rem 1.2rem; box-shadow: inset 0 1px 0 #fff; display: flex; flex-direction: column; gap: .3rem; }
+.find li a { font-size: 1.05rem; text-decoration: none; }
+.find li a:hover { text-decoration: underline; }
+.find li span { font-size: .93rem; color: #3b414c; }
+.find .fine { max-width: none; }
+.find li span.by { font-size: .85rem; color: var(--steel); }
+.find li span.by a { font-size: inherit; text-decoration: underline; }
 .skins .credit { margin: 1rem auto 0; text-align: center; }
 
 @media (max-width: 900px) {

@@ -1,5 +1,14 @@
 # Making skins
 
+## Where to find skins
+
+You don't have to make one. Thousands of existing skins work in Wavedeck:
+
+- **[Winamp Skin Museum](https://skins.webamp.org/)**: tens of thousands of classic `.wsz` skins, searchable, with previews. Created by [Jordan Eldredge](https://jordaneldredge.com/), who also made Webamp, the engine behind Wavedeck's modern skins.
+- **[WinCustomize](https://www.wincustomize.com/explore/winamp)**: a long-running Winamp skin archive, including modern `.wal` skins. Run by [Stardock](https://www.stardock.com/) and its community of skin artists.
+
+Download a skin and drop the file on the player. To keep it in the Skins menu, put it in the skins folder (right-click → Skins → Open skins folder).
+
 > Wavedeck also **loads** modern Winamp 5 skins (`.wal`) and Windows Media Player, Sonique, K-Jofol, Audion, Cowon and JetAudio skins. Just drop one on the player. This guide covers making Wavedeck's own classic-layout skins.
 
 Most people should use **Theme Studio** (right-click the player → Theme Studio). It builds a complete theme from design choices, with no drawing needed. Themes made there contain a `recipe.json` and are redrawn at the player's current size, so they stay sharp when scaled. They also include ordinary sprite sheets, so everything below still applies if you want to hand-edit one: use *Export the sprite sheets* at the bottom of Theme Studio.
