@@ -62,7 +62,7 @@ class App {
       shuffle: !!s.shuffle, repeat: !!s.repeat,
       timeMode: s.timeMode || 'elapsed', visMode: s.visMode ?? 0,
       eqVisible: s.eqVisible ?? true, plVisible: s.plVisible ?? true,
-      shade: !!s.shade, alwaysOnTop: !!s.alwaysOnTop, scaleK: s.scaleK ?? null, legacyDouble: !!s.doubleSize,
+      shade: !!s.shade, alwaysOnTop: !!s.alwaysOnTop, scaleK: s.scaleK ?? null, legacyDouble: !!s.doubleSize, modernK: s.modernK ?? null,
       plRows: s.plRows || 6,
       eq: { on: s.eq?.on ?? true, auto: !!s.eq?.auto, preamp: s.eq?.preamp ?? 0, bands: s.eq?.bands || EQ_BANDS.map(() => 0) },
       scrollTitle: s.scrollTitle ?? true,
@@ -117,7 +117,7 @@ class App {
       const st = this.state;
       R.setSettings({
         volume: st.volume, balance: st.balance, shuffle: st.shuffle, repeat: st.repeat, timeMode: st.timeMode,
-        visMode: st.visMode, eqVisible: st.eqVisible, plVisible: st.plVisible, shade: st.shade, scaleK: st.scaleK, doubleSize: false,
+        visMode: st.visMode, eqVisible: st.eqVisible, plVisible: st.plVisible, shade: st.shade, scaleK: st.scaleK, modernK: st.modernK, doubleSize: false,
         plRows: st.plRows, eq: st.eq, scrollTitle: st.scrollTitle, plMode: st.plMode,
         playlist: st.playlist.slice(0, 20000).map(({ id, ...t }) => t), current: st.current,
       });
@@ -383,8 +383,17 @@ class App {
     const mainH = st.shade ? 14 : 116;
     return { w: 275, h: mainH + (st.eqVisible ? 116 : 0) + (st.plVisible ? this.pl.height : 0), mainH };
   }
+  // Current size step: the classic player's, or the modern skin's while one is showing.
+  get curK() { return this.modernActive() ? (this.state.modernK || this.baseK) : this.state.scaleK; }
   maxK() {
     const wa = this.workArea || { width: screen.availWidth, height: screen.availHeight };
+    if (this.modernActive()) {
+      // the largest size where the biggest skin window still fits on screen
+      const b = this.modernBox;
+      if (!b) return this.baseK * 4;
+      const fit = Math.floor(Math.min((wa.width * this.dpr) / Math.max(1, b.w), (wa.height * this.dpr) / Math.max(1, b.h)));
+      return Math.max(1, Math.min(fit, this.baseK * 4));
+    }
     const { w } = this.logicalSize();
     // limit by the full (unshaded) height so toggling shade or panels never needs a shrink
     const fullH = 116 + (this.state.eqVisible ? 116 : 0) + (this.state.plVisible ? this.pl.height : 0);
@@ -409,6 +418,13 @@ class App {
   }
   setScale(k, { flash = true } = {}) {
     k = this.clampK(k);
+    if (this.modernActive()) {
+      if (k === this.curK) return;
+      this.state.modernK = k; this.persist();
+      const m = this.modernWin.wavedeckModern;
+      if (m && m.setScale) m.setScale(k / this.dpr);
+      return;
+    }
     if (k === this.state.scaleK) return;
     this.state.scaleK = k; this.layout(); this.persist();
     if (flash) this.flashSize();
@@ -417,15 +433,15 @@ class App {
     this.main.flash(`SIZE: ${Math.round((this.state.scaleK / this.baseK) * 100)}%`);
     clearTimeout(this.sizeT); this.sizeT = setTimeout(() => this.main.flash(null), 1000);
   }
-  toggleDouble() { this.setScale(this.state.scaleK === this.baseK ? this.baseK * 2 : this.baseK); }
-  scaleStep(d) { this.setScale(this.state.scaleK + d); }
+  toggleDouble() { this.setScale(this.curK === this.baseK ? this.baseK * 2 : this.baseK); }
+  scaleStep(d) { this.setScale(this.curK + d); }
   sizeSubmenu() {
     const max = this.maxK(), items = [];
     for (let k = 1; k <= max; k++) {
       const pct = Math.round((k / this.baseK) * 100);
-      items.push({ id: `size:${k}`, label: `${pct}%${k === this.baseK ? ' (normal)' : ''}`, checked: k === this.state.scaleK, radio: true });
+      items.push({ id: `size:${k}`, label: `${pct}%${k === this.baseK ? ' (normal)' : ''}`, checked: k === this.curK, radio: true });
     }
-    return [...items, { type: 'separator' }, { id: 'size:up', label: 'Larger', accelerator: 'Ctrl+=', enabled: this.state.scaleK < max }, { id: 'size:down', label: 'Smaller', accelerator: 'Ctrl+-', enabled: this.state.scaleK > 1 }];
+    return [...items, { type: 'separator' }, { id: 'size:up', label: 'Larger', accelerator: 'Ctrl+=', enabled: this.curK < max }, { id: 'size:down', label: 'Smaller', accelerator: 'Ctrl+-', enabled: this.curK > 1 }];
   }
   sizeHandlers() {
     const h = { 'size:up': () => this.scaleStep(1), 'size:down': () => this.scaleStep(-1) };
@@ -663,6 +679,9 @@ class App {
 
   // tiny in-window prompt
   prompt(title, label, value = '', placeholder = '') {
+    // while a modern skin is showing, this window is hidden: ask from the skin's window
+    const m = this.modernActive() && this.modernWin.wavedeckModern;
+    if (m && m.prompt) return m.prompt(title, label, value, placeholder);
     return new Promise((resolve) => {
       const o = document.getElementById('overlay');
       o.innerHTML = `<form class="prompt"><b>${title}</b><label>${label}</label><input spellcheck="false"><div><button type="button" class="c">Cancel</button><button>OK</button></div></form>`;
@@ -715,6 +734,7 @@ class App {
   async showMainMenu() {
     const st = this.state;
     const skins = await this.skinsSubmenu();
+    const modern = this.modernActive(), tapes = this.mixtapes.list;
     const tpl = [
       { id: 'about', label: 'About Wavedeck…' },
       { type: 'separator' },
@@ -722,18 +742,21 @@ class App {
       { id: 'openfolder', label: 'Play folder…', accelerator: 'Shift+L' },
       { id: 'openurl', label: 'Play URL…', accelerator: 'Ctrl+L' },
       { type: 'separator' },
-      { id: 'library', label: 'Media Library', accelerator: 'Alt+L' },
-      { id: 'browse', label: 'Browse in playlist window', accelerator: 'Tab' },
+      { id: 'library', label: modern ? 'Media Library: servers, mixtapes, playlists' : 'Media Library', accelerator: 'Alt+L' },
+      ...(modern ? [] : [{ id: 'browse', label: 'Browse in playlist window', accelerator: 'Tab' }]),
+      { label: 'Play a mixtape', submenu: tapes.length ? tapes.map((m) => ({ id: `playmx:${m.id}`, label: `${m.name}  (${m.tracks.length})` })) : [{ label: 'No mixtapes yet', enabled: false }] },
       { id: 'savemix', label: 'Save playlist as mixtape…' },
       { id: 'milkdrop', label: 'Visualization window', accelerator: 'Ctrl+Shift+K' },
-      { id: 'eqwin', label: 'Equalizer', checked: st.eqVisible, accelerator: 'Alt+G' },
-      { id: 'plwin', label: 'Playlist editor', checked: st.plVisible, accelerator: 'Alt+E' },
+      ...(modern ? [] : [
+        { id: 'eqwin', label: 'Equalizer', checked: st.eqVisible, accelerator: 'Alt+G' },
+        { id: 'plwin', label: 'Playlist editor', checked: st.plVisible, accelerator: 'Alt+E' },
+      ]),
       { type: 'separator' },
       { id: 'skin:studio', label: 'Theme Studio…', accelerator: 'Ctrl+Shift+T' },
       { label: 'Skins', submenu: skins },
       { label: 'Options', submenu: [
         { id: 'ontop', label: 'Always on top', checked: st.alwaysOnTop, accelerator: 'Ctrl+A' },
-        { id: 'double', label: 'Double size', checked: st.scaleK === this.baseK * 2, accelerator: 'Ctrl+D' },
+        { id: 'double', label: 'Double size', checked: this.curK === this.baseK * 2, accelerator: 'Ctrl+D' },
         { label: 'Size', submenu: this.sizeSubmenu() },
         { id: 'shade', label: 'Windowshade mode', checked: st.shade, accelerator: 'Ctrl+W' },
         { id: 'timemode', label: 'Time remaining', checked: st.timeMode === 'remaining', accelerator: 'Ctrl+T' },
@@ -761,7 +784,7 @@ class App {
     ];
     this.menu(tpl, {
       about: () => this.showAbout(), openfile: () => this.openFiles(true), openfolder: () => this.openFolder(true), openurl: () => this.openUrl(),
-      library: () => this.openLibrary(), browse: () => { if (!this.state.plVisible) this.togglePlWindow(); this.setPlMode('browse'); }, savemix: () => this.saveAsMixtape(), milkdrop: () => this.openMilkdrop(), eqwin: () => this.toggleEqWindow(), plwin: () => this.togglePlWindow(),
+      library: () => this.openLibrary(), browse: () => { if (this.modernActive()) { this.openLibrary(); return; } if (!this.state.plVisible) this.togglePlWindow(); this.setPlMode('browse'); }, savemix: () => this.saveAsMixtape(), milkdrop: () => this.openMilkdrop(), eqwin: () => this.toggleEqWindow(), plwin: () => this.togglePlWindow(),
       ontop: () => this.toggleOnTop(), double: () => this.toggleDouble(), shade: () => this.toggleShade(), timemode: () => this.toggleTimeMode(),
       scroll: () => { this.state.scrollTitle = !this.state.scrollTitle; this.persist(); },
       repeat: () => this.toggleRepeat(), shuffle: () => this.toggleShuffle(),
@@ -769,6 +792,7 @@ class App {
       back5: () => this.seekBy(-5), fwd5: () => this.seekBy(5), jump: () => this.openTool('jump'),
       plugindir: () => R.plugins.openDir(), exit: () => R.win.close(),
       ...this.visHandlers(), ...this.sizeHandlers(), ...(await this.skinHandlers()),
+      ...Object.fromEntries(tapes.map((m) => [`playmx:${m.id}`, async () => this.playList(await this.resolveRefs(m.tracks), 0)])),
     });
   }
   visSubmenu() {
@@ -1119,6 +1143,18 @@ class App {
       addToMixtape: (id, tracks) => app.addToMixtape(id, tracks),
       createMixtape: (name, tracks) => app.mixtapes.create(name, tracks),
       nextMixtapeName: () => app.mixtapes.nextName(),
+      // used by the Media Library window (works with classic and modern skins)
+      mixtapeList: () => app.mixtapes.list.map((m) => ({ id: m.id, name: m.name, count: m.tracks.length, duration: m.tracks.reduce((s, t) => s + (t.duration || 0), 0) })),
+      mixtapeTracks: async (id) => app.resolveRefs(app.mixtapes.get(id)?.tracks || []),
+      renameMixtape: (id, name) => app.mixtapes.rename(id, name),
+      deleteMixtape: (id) => app.mixtapes.remove(id),
+      removeFromMixtape: async (id, indices) => { for (const i of [...indices].sort((a, b) => b - a)) await app.mixtapes.removeAt(id, i); },
+      playList: (tracks, start, opts) => app.playList(tracks, start, opts),
+      shuffleAll: async (sourceId) => {
+        await app.sources.load();
+        const src = app.sources.all().find((x) => x.id === sourceId);
+        if (src && (src.kind !== 'subsonic' || await app.sources.connect(src))) await app.startEndless(src);
+      },
     };
   }
 

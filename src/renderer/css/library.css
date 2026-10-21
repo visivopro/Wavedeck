@@ -20,11 +20,11 @@ input, select { font: inherit; color: var(--text); }
 .brand { font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 9px; padding: 2px 8px 14px; letter-spacing: .2px; }
 .logo { width: 24px; height: 24px; border-radius: 6px; background: var(--amber); color: #2a1a00; display: grid; place-items: center; font-weight: 800; font-size: 14px; }
 .side-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); padding: 14px 8px 6px; }
-#sources button, .side-btn { width: 100%; text-align: left; padding: 7px 8px; border-radius: 6px; display: flex; gap: 9px; align-items: center; color: var(--muted); }
-#sources button:hover, .side-btn:hover { background: var(--hover); color: var(--text); }
-#sources button.on { background: var(--hover); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
-#sources i, .side-btn i { font-style: normal; width: 16px; text-align: center; opacity: .8; }
-#sources .count { margin-left: auto; font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
+#sources button, #mine button, .side-btn { width: 100%; text-align: left; padding: 7px 8px; border-radius: 6px; display: flex; gap: 9px; align-items: center; color: var(--muted); }
+#sources button:hover, #mine button:hover, .side-btn:hover { background: var(--hover); color: var(--text); }
+#sources button.on, #mine button.on { background: var(--hover); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+#sources i, #mine i, .side-btn i { font-style: normal; width: 16px; text-align: center; opacity: .8; }
+#sources .count, #mine .count { margin-left: auto; font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
 #sources .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); margin-left: auto; }
 #sources .dot.ok { background: var(--accent); }
 .scan { margin: 10px 8px 0; font-size: 12px; color: var(--muted); }
@@ -141,3 +141,17 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--line); padding: 8px 14px; border-radius: 8px; z-index: 40; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
 #toast[hidden] { display: none; }
 .loading { color: var(--muted); padding: 30px; }
+
+/* mixtapes and server playlists */
+#btn-shuffleall { white-space: nowrap; }
+body.mx-mode #tabs, body.mx-mode .search, body.mx-mode #sort, body.mx-mode #btn-shuffleall { visibility: hidden; }
+.mx-list { display: flex; flex-direction: column; gap: 2px; }
+.mx-row { display: grid; grid-template-columns: 34px 1fr auto auto; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 8px; cursor: default; }
+.mx-row:hover { background: var(--hover); }
+.mx-row .ic { width: 34px; height: 34px; border-radius: 6px; display: grid; place-items: center; font-weight: 700; color: #fff; }
+.mx-row .nm { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-row .info { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+.mx-row .acts { display: flex; gap: 6px; }
+.mx-row .acts .btn { padding: 4px 10px; }
+.mx-new { margin-bottom: 12px; }
+.tr.missing { opacity: .45; }

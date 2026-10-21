@@ -13,6 +13,16 @@
 - Windows you close on a skin (an About or welcome window, say) stay closed next time, and windows you open stay open.
 - Song length, bitrate and playlist totals show real values on the skin.
 - Side windows open clear of a skin's slide-out drawers.
+- Modern skins scale: Ctrl + / Ctrl −, Ctrl+D, Ctrl + mouse wheel or *Options → Size*, in the same sharp whole-pixel steps as classic skins.
+- Like Winamp, a skin's transparent areas don't catch the mouse, and windows drag from any part of their artwork that isn't a control. Fixes drawers whose controls couldn't be clicked (D-Reliction's EQ, Config and Colors) and windows that wouldn't drag.
+- Fixed skin scripts mis-evaluating `&&` and `||`, which broke knobs and other scripted controls (WooHoo-FER's volume knob), and right-clicks being treated as left-clicks by skin scripts.
+- A skin's Library button opens Wavedeck's Media Library; right-click always opens Wavedeck's menu; prompts such as naming a mixtape appear over the skin.
+
+**Media Library**
+
+- New *Mixtapes* section: play, shuffle, rename, delete and remove songs from your mixtapes.
+- Music servers get a *Playlists* tab for their own playlists, and every source has a *Shuffle all* button, so everything from the Browse tab is reachable while a modern skin is showing.
+- The right-click menu has *Play a mixtape* for one-click access.
 
 **Shaped classic skins**
 

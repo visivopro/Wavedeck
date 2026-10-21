@@ -14,7 +14,7 @@ const trackKey = (t) => t && (t.path || t.url);
 const codecName = (c) => { c = String(c || ''); if (/mpeg.*layer\s*3|^mp3$/i.test(c)) return 'MP3'; if (/mpeg.*layer\s*2/i.test(c)) return 'MP2'; if (/^(aac|mpeg-4\/aac)/i.test(c) || /mp4a|m4a/i.test(c)) return 'AAC'; if (/vorbis/i.test(c)) return 'OGG'; if (/pcm|wav/i.test(c)) return 'WAV'; return c.toUpperCase(); };
 
 const S = {
-  sources: [], source: null, view: 'artists', artist: null, genre: null, album: null, query: '',
+  sources: [], source: null, mx: null, mixtape: null, playlist: null, view: 'artists', artist: null, genre: null, album: null, query: '',
   sort: { albums: 'artist', songs: { key: 'artist', dir: 1 } }, selected: new Set(), rows: [],
 };
 
@@ -36,7 +36,11 @@ async function init() {
   const player = P();
   if (player) player.on('trackchange', markPlaying);
   window.onSkinChange = applySkin;
+  R.mixtapes.onChanged(() => { renderMixtapeCount(); if (S.mx) render(); });
+  renderMixtapeCount();
 }
+
+function renderMixtapeCount() { const p = P(); const n = p ? p.mixtapeList().length : 0; $('#mx-count').textContent = n ? String(n) : ''; }
 
 function applySkin() {
   const p = P();
@@ -51,6 +55,8 @@ function bindChrome() {
   $('#btn-folders').onclick = foldersDialog;
   $('#btn-servers').onclick = serversDialog;
   $('#btn-rescan').onclick = () => { R.lib.scan(); };
+  $('#nav-mixtapes').onclick = () => { S.mx = true; S.mixtape = null; renderSources(); render(); };
+  $('#btn-shuffleall').onclick = async () => { const p = P(); if (!p) return; toast(`Shuffling all of ${S.source.name}…`); await p.shuffleAll(S.source.id); };
   $('#sort').onchange = (e) => { S.sort.albums = e.target.value; render(); };
   window.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); $('#search').focus(); $('#search').select(); }
@@ -65,7 +71,7 @@ function bindChrome() {
 }
 
 function setView(v) {
-  S.view = v; S.album = null; S.query = ''; $('#search').value = '';
+  S.view = v; S.album = null; S.playlist = null; S.query = ''; $('#search').value = '';
   for (const b of document.querySelectorAll('#tabs button')) b.classList.toggle('on', b.dataset.view === v);
   render();
 }
@@ -75,13 +81,20 @@ function renderSources() {
   nav.innerHTML = '';
   for (const s of S.sources) {
     const b = document.createElement('button');
-    b.className = s === S.source ? 'on' : '';
+    b.className = s === S.source && !S.mx ? 'on' : '';
     const icon = s.kind === 'local' ? '◉' : '⇄';
     const right = s.kind === 'local' ? `<span class="count">${s.count.toLocaleString()}</span>` : `<span class="dot ${s.ok ? 'ok' : ''}" title="${s.ok ? 'Connected' : esc(s.error || 'Connecting…')}"></span>`;
     b.innerHTML = `<i>${icon}</i><span>${esc(s.name)}</span>${right}`;
-    b.onclick = () => { S.source = s; S.artist = S.genre = S.album = null; renderSources(); render(); };
+    b.onclick = () => { S.source = s; S.mx = false; S.artist = S.genre = S.album = S.playlist = null; if (S.view === 'playlists') S.view = 'artists'; renderSources(); render(); };
     nav.appendChild(b);
   }
+  $('#nav-mixtapes').classList.toggle('on', !!S.mx);
+  document.body.classList.toggle('mx-mode', !!S.mx);
+  // Playlists tab only for sources that have playlists (music servers)
+  const src = S.source;
+  const hasPl = src && src.kind === 'subsonic' && src.ok;
+  $('#tab-playlists').hidden = !hasPl;
+  for (const b of document.querySelectorAll('#tabs button')) b.classList.toggle('on', b.dataset.view === S.view);
   const local = S.sources[0];
   $('#stats').innerHTML = local.count ? `${local.count.toLocaleString()} tracks<br>${local.albumMap.size.toLocaleString()} albums · ${local.artistMap.size.toLocaleString()} artists` : '';
 }
@@ -108,9 +121,10 @@ function setSortOptions(opts) {
 
 async function render() {
   hideCtx();
-  S.selected = new Set(); S.rows = [];
+  S.selected = new Set(); S.rows = []; S.rowsMixtape = null;
   const src = S.source;
   setSortOptions([]);
+  if (S.mx) return S.mixtape ? renderMixtape(S.mixtape) : renderMixtapes();
   if (src.kind === 'local' && !src.count) return renderEmpty();
   if (src.kind === 'subsonic' && src.ok === false) return renderError(src);
   if (S.album) return renderAlbum(S.album);
@@ -119,6 +133,110 @@ async function render() {
   if (S.view === 'albums') return renderAllAlbums();
   if (S.view === 'songs') return renderSongs();
   if (S.view === 'genres') return renderGenres();
+  if (S.view === 'playlists') return S.playlist ? renderServerPlaylist(S.playlist) : renderServerPlaylists();
+}
+
+// ---------------- mixtapes ----------------
+function mxIcon(name) { return `<span class="ic" style="background:linear-gradient(135deg,hsl(${hue(name)} 45% 38%),hsl(${(hue(name) + 50) % 360} 40% 22%))">${esc(initials(name))}</span>`; }
+
+function renderMixtapes() {
+  const p = P(); const tapes = p ? p.mixtapeList() : [];
+  const v = view();
+  v.innerHTML = `<div class="pane" style="height:100%"><button class="btn primary mx-new" id="mx-new">+ New mixtape</button>
+    ${tapes.length ? '<div class="mx-list" id="mx-list"></div>' : '<div class="empty"><div><h2>No mixtapes yet</h2><p>Mixtapes are your own named playlists. Right-click any song, album or artist and choose “Add to mixtape…”, or start an empty one here.</p></div></div>'}</div>`;
+  $('#mx-new').onclick = () => toMixtape(async () => [], { newOnly: true });
+  const list = $('#mx-list'); if (!list) return;
+  for (const m of tapes) {
+    const row = document.createElement('div'); row.className = 'mx-row';
+    row.innerHTML = `${mxIcon(m.name)}<span class="nm">${esc(m.name)}</span><span class="info">${m.count} song${m.count === 1 ? '' : 's'}${m.duration ? ' · ' + fmtLong(m.duration) : ''}</span><span class="acts"><button class="btn primary">▶ Play</button><button class="btn">⤮ Shuffle</button></span>`;
+    const [bp, bs] = row.querySelectorAll('.acts .btn');
+    bp.onclick = async (e) => { e.stopPropagation(); p.playList(await p.mixtapeTracks(m.id), 0); };
+    bs.onclick = async (e) => { e.stopPropagation(); p.playList(await p.mixtapeTracks(m.id), 0, { shuffle: true }); };
+    row.onclick = () => { S.mixtape = m.id; render(); };
+    row.oncontextmenu = (e) => ctx(e, [['Play', async () => p.playList(await p.mixtapeTracks(m.id), 0)], ['Shuffle', async () => p.playList(await p.mixtapeTracks(m.id), 0, { shuffle: true })], ['Add to playlist', async () => enqueue((await p.mixtapeTracks(m.id)).filter((t) => !t.missing))], null, ['Rename…', () => renameMx(m.id)], ['Delete…', () => deleteMx(m.id)]]);
+    list.appendChild(row);
+  }
+}
+
+async function renderMixtape(id) {
+  const p = P(); const m = p && p.mixtapeList().find((x) => x.id === id);
+  if (!m) { S.mixtape = null; return renderMixtapes(); }
+  const v = view();
+  v.innerHTML = '<div class="pane" style="height:100%" id="mxpane"></div>';
+  const pane = $('#mxpane'); loading(pane);
+  const tracks = await p.mixtapeTracks(id);
+  if (S.mixtape !== id) return;
+  const missing = tracks.filter((t) => t.missing).length;
+  pane.innerHTML = `<button class="back" id="back">← Mixtapes</button>
+    <div class="album-head"><div class="cover" style="background:linear-gradient(135deg,hsl(${hue(m.name)} 45% 38%),hsl(${(hue(m.name) + 50) % 360} 40% 18%))"><span class="ph">${esc(initials(m.name))}</span></div>
+      <div class="meta"><div class="kind">Mixtape</div><h1>${esc(m.name)}</h1>
+      <div class="sub">${tracks.length} song${tracks.length === 1 ? '' : 's'}${m.duration ? ' · ' + fmtLong(m.duration) : ''}${missing ? ` · ${missing} on a server that isn't connected` : ''}</div>
+      <div class="row-actions" style="margin:0"><button class="btn primary" id="mx-play">▶ Play</button><button class="btn" id="mx-shuf">⤮ Shuffle</button><button class="btn" id="mx-ren">Rename</button><button class="btn" id="mx-del">Delete</button></div></div></div>
+    ${tracks.length ? '<div class="table" id="mx-table"></div>' : '<div class="empty"><div><p>This mixtape is empty. Right-click songs, albums or artists anywhere and choose “Add to mixtape…”.</p></div></div>'}`;
+  $('#back').onclick = () => { S.mixtape = null; render(); };
+  $('#mx-play').onclick = () => p.playList(tracks, 0);
+  $('#mx-shuf').onclick = () => p.playList(tracks, 0, { shuffle: true });
+  $('#mx-ren').onclick = () => renameMx(id);
+  $('#mx-del').onclick = () => deleteMx(id);
+  if (tracks.length) trackTable($('#mx-table'), tracks, { compact: false, mixtape: id });
+}
+
+function renameMx(id) {
+  const p = P(); const m = p.mixtapeList().find((x) => x.id === id); if (!m) return;
+  const d = modal(`<h2>Rename mixtape</h2><div class="row"><input id="mx-name" spellcheck="false"></div><div class="foot"><button class="btn" id="mx-cancel">Cancel</button><button class="btn primary" id="mx-ok">Rename</button></div>`);
+  const inp = d.querySelector('#mx-name'); inp.value = m.name; inp.focus(); inp.select();
+  const ok = async () => { if (inp.value.trim()) await p.renameMixtape(id, inp.value.trim()); closeModal(); };
+  d.querySelector('#mx-ok').onclick = ok; d.querySelector('#mx-cancel').onclick = closeModal;
+  inp.onkeydown = (e) => { if (e.key === 'Enter') ok(); };
+}
+
+function deleteMx(id) {
+  const p = P(); const m = p.mixtapeList().find((x) => x.id === id); if (!m) return;
+  const d = modal(`<h2>Delete “${esc(m.name)}”?</h2><p class="hint">The songs themselves are not affected.</p><div class="foot"><button class="btn" id="mx-cancel">Cancel</button><button class="btn primary" id="mx-ok">Delete</button></div>`);
+  d.querySelector('#mx-ok').onclick = async () => { await p.deleteMixtape(id); closeModal(); S.mixtape = null; render(); };
+  d.querySelector('#mx-cancel').onclick = closeModal;
+}
+
+// ---------------- server playlists ----------------
+async function renderServerPlaylists() {
+  const v = view();
+  v.innerHTML = '<div class="pane" style="height:100%" id="plpane"></div>';
+  const pane = $('#plpane'); loading(pane);
+  let pls = [];
+  try { pls = (await S.source.playlists()) || []; } catch (e) { pane.innerHTML = `<div class="loading">${esc(e.message)}</div>`; return; }
+  if (!pls.length) { pane.innerHTML = '<div class="empty"><div><h2>No playlists on this server yet</h2></div></div>'; return; }
+  pane.innerHTML = '<div class="mx-list" id="pl-list"></div>';
+  const list = $('#pl-list');
+  for (const pl of pls) {
+    const row = document.createElement('div'); row.className = 'mx-row';
+    row.innerHTML = `${mxIcon(pl.name)}<span class="nm">${esc(pl.name)}</span><span class="info">${pl.songCount ? pl.songCount + ' songs' : ''}</span><span class="acts"><button class="btn primary">▶ Play</button><button class="btn">⤮ Shuffle</button></span>`;
+    const [bp, bs] = row.querySelectorAll('.acts .btn');
+    bp.onclick = async (e) => { e.stopPropagation(); play(await S.source.playlistTracks(pl.key), 0); };
+    bs.onclick = async (e) => { e.stopPropagation(); const t = await S.source.playlistTracks(pl.key); shuffle(t); play(t, 0); };
+    row.onclick = () => { S.playlist = pl; render(); };
+    row.oncontextmenu = (e) => ctx(e, [['Play', async () => play(await S.source.playlistTracks(pl.key), 0)], ['Add to playlist', async () => enqueue(await S.source.playlistTracks(pl.key))], ['Add to mixtape…', () => toMixtape(() => S.source.playlistTracks(pl.key))]]);
+    list.appendChild(row);
+  }
+}
+
+async function renderServerPlaylist(pl) {
+  const v = view();
+  v.innerHTML = '<div class="pane" style="height:100%" id="plpane"></div>';
+  const pane = $('#plpane'); loading(pane);
+  const tracks = await S.source.playlistTracks(pl.key);
+  if (S.playlist !== pl) return;
+  const dur = tracks.reduce((s, t) => s + (t.duration || 0), 0);
+  pane.innerHTML = `<button class="back" id="back">← Playlists</button>
+    <div class="album-head"><div class="cover" style="background:linear-gradient(135deg,hsl(${hue(pl.name)} 45% 38%),hsl(${(hue(pl.name) + 50) % 360} 40% 18%))"><span class="ph">${esc(initials(pl.name))}</span></div>
+      <div class="meta"><div class="kind">Playlist · ${esc(S.source.name)}</div><h1>${esc(pl.name)}</h1><div class="sub">${tracks.length} songs · ${fmtLong(dur)}</div>
+      <div class="row-actions" style="margin:0"><button class="btn primary" id="pl-play">▶ Play</button><button class="btn" id="pl-shuf">⤮ Shuffle</button><button class="btn" id="pl-add">+ Add to playlist</button><button class="btn" id="pl-mx">Add to mixtape</button></div></div></div>
+    <div class="table" id="pl-table"></div>`;
+  $('#back').onclick = () => { S.playlist = null; render(); };
+  $('#pl-play').onclick = () => play(tracks, 0);
+  $('#pl-shuf').onclick = () => { const t = [...tracks]; shuffle(t); play(t, 0); };
+  $('#pl-add').onclick = () => enqueue(tracks);
+  $('#pl-mx').onclick = () => toMixtape(async () => tracks);
+  trackTable($('#pl-table'), tracks, { compact: false });
 }
 
 function renderEmpty() {
@@ -289,8 +407,8 @@ function goArtist(al) {
 }
 
 // Track table (non-virtual, for albums and search results)
-function trackTable(container, tracks, { compact }) {
-  S.rows = tracks;
+function trackTable(container, tracks, { compact, mixtape = null }) {
+  S.rows = tracks; S.rowsMixtape = mixtape;
   const cur = trackKey(P()?.getCurrent());
   container.innerHTML = compact
     ? '<div class="thead"><span>#</span><span>Title</span><span>Format</span><span style="text-align:right">Time</span></div>'
@@ -302,7 +420,7 @@ function trackTable(container, tracks, { compact }) {
 
 function trackRow(t, i, compact, cur) {
   const row = document.createElement('div');
-  row.className = 'tr' + (trackKey(t) === cur ? ' playing' : '') + (S.selected.has(i) ? ' sel' : '');
+  row.className = 'tr' + (trackKey(t) === cur ? ' playing' : '') + (S.selected.has(i) ? ' sel' : '') + (t.missing ? ' missing' : '');
   row.dataset.i = i;
   const fmtCls = t.lossless ? 'c-fmt lossless' : 'c-fmt';
   const fmtTxt = esc(codecName(t.codec)) + (t.bitrate && !t.lossless ? ` ${t.bitrate}` : '');
@@ -315,7 +433,10 @@ function trackRow(t, i, compact, cur) {
   row.oncontextmenu = (e) => {
     if (!S.selected.has(i)) { S.selected = new Set([i]); paintSelection(); }
     const sel = selectedTracks();
+    const mxId = S.rowsMixtape;
+    const idx = [...S.selected];
     ctx(e, [['Play', () => play(sel, 0)], ['Add to playlist', () => enqueue(sel)], ['Play next', () => playNext(sel)], ['Add to mixtape…', () => toMixtape(async () => sel)], null,
+      ...(mxId ? [['Remove from this mixtape', async () => { await P().removeFromMixtape(mxId, idx); render(); }]] : []),
       ...(sel[0]?.path ? [['Show in folder', () => R.showInFolder(sel[0].path)]] : [])]);
   };
   row.draggable = true;
@@ -400,14 +521,14 @@ async function play(tracks, start) {
 }
 async function enqueue(tracks) { const p = P(); if (!p || !tracks.length) return; await p.addTracks(tracks); toast(`Added ${tracks.length} song${tracks.length === 1 ? '' : 's'} to the playlist`); }
 // Add to mixtape: native menu listing the player's mixtapes, plus "New mixtape…".
-async function toMixtape(getTracks) {
+async function toMixtape(getTracks, { newOnly = false } = {}) {
   const p = P(); if (!p) return;
   const tapes = p.mixtapes();
-  const id = await R.popupMenu([...tapes.map((m) => ({ id: m.id, label: `${m.name}  (${m.count})` })), ...(tapes.length ? [{ type: 'separator' }] : []), { id: '__new', label: 'New mixtape…' }]);
+  const id = newOnly ? '__new' : await R.popupMenu([...tapes.map((m) => ({ id: m.id, label: `${m.name}  (${m.count})` })), ...(tapes.length ? [{ type: 'separator' }] : []), { id: '__new', label: 'New mixtape…' }]);
   if (!id) return;
   const tracks = await getTracks();
   if (id !== '__new') { await p.addToMixtape(id, tracks); toast(`Added to ${tapes.find((m) => m.id === id)?.name}`); return; }
-  const d = modal(`<h2>Name your mixtape</h2><p class="hint">${tracks.length} song${tracks.length === 1 ? '' : 's'} will be added.</p><div class="row"><input id="mx-name" spellcheck="false"></div><div class="foot"><button class="btn" id="mx-cancel">Cancel</button><button class="btn primary" id="mx-ok">Create mixtape</button></div>`);
+  const d = modal(`<h2>Name your mixtape</h2>${tracks.length ? `<p class="hint">${tracks.length} song${tracks.length === 1 ? '' : 's'} will be added.</p>` : ''}<div class="row"><input id="mx-name" spellcheck="false"></div><div class="foot"><button class="btn" id="mx-cancel">Cancel</button><button class="btn primary" id="mx-ok">Create mixtape</button></div>`);
   const inp = d.querySelector('#mx-name'); inp.placeholder = 'Name your mixtape, e.g. Road Trip'; inp.focus();
   const ok = async () => { const m = await p.createMixtape(inp.value || p.nextMixtapeName(), tracks); closeModal(); toast(`Created ${m.name}`); };
   d.querySelector('#mx-ok').onclick = ok; d.querySelector('#mx-cancel').onclick = closeModal;

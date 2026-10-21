@@ -1,3 +1,34 @@
+diff --git a/packages/webamp-modern/src/maki/interpreter.ts b/packages/webamp-modern/src/maki/interpreter.ts
+index 9005d2d..e6ac135 100644
+--- a/packages/webamp-modern/src/maki/interpreter.ts
++++ b/packages/webamp-modern/src/maki/interpreter.ts
+@@ -749,11 +749,8 @@ class Interpreter {
+             case "NULL":
+               throw new Error("Tried to add non-numbers.80b");
+           }
+-          if (b.value && a.value) {
+-            this.push(a);
+-          } else {
+-            this.push(b);
+-          }
++          // Wavedeck: the old version returned b (true) when b was true and a false.
++          this.push(V.newInt(b.value && a.value ? 1 : 0));
+           break;
+         }
+         // logOr || 0x51
+@@ -775,11 +772,7 @@ class Interpreter {
+             case "NULL":
+               throw new Error("Tried to add non-numbers.81b");
+           }
+-          if (b.value) {
+-            this.push(b);
+-          } else {
+-            this.push(a);
+-          }
++          this.push(V.newInt(b.value || a.value ? 1 : 0));
+           break;
+         }
+         // << 0x58
 diff --git a/packages/webamp-modern/src/skin/AudioPlayer.ts b/packages/webamp-modern/src/skin/AudioPlayer.ts
 index e5c1a45..fbe13a5 100644
 --- a/packages/webamp-modern/src/skin/AudioPlayer.ts
@@ -13,6 +44,93 @@ index e5c1a45..fbe13a5 100644
 +  : new AudioPlayer();
  
  export default AUDIO_PLAYER;
+diff --git a/packages/webamp-modern/src/skin/makiClasses/Group.ts b/packages/webamp-modern/src/skin/makiClasses/Group.ts
+index 5f2156e..5616f91 100644
+--- a/packages/webamp-modern/src/skin/makiClasses/Group.ts
++++ b/packages/webamp-modern/src/skin/makiClasses/Group.ts
+@@ -294,6 +294,9 @@ export default class Group extends Movable {
+     }
+     //TODO: allow move/resize if has ._image
+     this._div.style.pointerEvents = "none";
++    // Wavedeck: like Winamp, a window takes the mouse wherever it is drawn
++    // (to drag it); the host page passes clicks through where nothing is drawn.
++    if ((this as any)._isLayout) this._div.style.pointerEvents = "auto";
+     this._renderBackground();
+     this.appendChildrenDiv();
+     if (this._autowidthsource) {
+diff --git a/packages/webamp-modern/src/skin/makiClasses/GuiObj.ts b/packages/webamp-modern/src/skin/makiClasses/GuiObj.ts
+index 5ed16cf..4afeae7 100644
+--- a/packages/webamp-modern/src/skin/makiClasses/GuiObj.ts
++++ b/packages/webamp-modern/src/skin/makiClasses/GuiObj.ts
+@@ -280,18 +280,21 @@ export default class GuiObj extends XmlObj {
+ 
+     this._div.addEventListener("mousedown", (e) => {
+       e.stopPropagation();
+-      // e.preventDefault();
+-      console.log("mouse-down!");
+-      this.onLeftButtonDown(
++      // Wavedeck: right clicks are right clicks (they were all sent as left)
++      const right = e.button === 2;
++      if (e.button !== 0 && !right) return;
++      (right ? this.onRightButtonDown : this.onLeftButtonDown).call(
++        this,
+         e.offsetX + this.getleft(),
+         e.offsetY + this.gettop()
+       );
++      // Wavedeck: like Winamp, a window can be dragged by its background and
++      // by plain pictures that aren't controls (unless they say move="0").
++      if (!right && this._wdDragsWindow()) (this as any)._handleMoving(e);
+ 
+       const mouseUpHandler = (e: MouseEvent) => {
+-        // e.stopPropagation();
+-        // e.preventDefault();
+-        console.log("mouse-up!");
+-        this.onLeftButtonUp(
++        (right ? this.onRightButtonUp : this.onLeftButtonUp).call(
++          this,
+           e.offsetX + this.getleft(),
+           e.offsetY + this.gettop()
+         );
+@@ -310,6 +313,27 @@ export default class GuiObj extends XmlObj {
+ 
+   dispose() {}
+ 
++  _wdDragsWindow(): boolean {
++    const self: any = this;
++    if (typeof self._handleMoving !== "function") return false;
++    if (self._movable || self._resize || self._wdMoveExplicit || self._ghost) return false;
++    const kind = this.constructor.name;
++    if (self._isLayout) return true;
++    if (kind !== "Layer" && kind !== "AnimatedLayer") return false;
++    // a picture a script listens to for clicks is acting as a control
++    const vm: any = this._uiRoot.vm;
++    const MOUSE = /^on(left|right)(button(down|up)|click)|^onleftbuttondblclk|^onmousemove/;
++    for (const script of vm._scripts || []) {
++      for (const b of script.bindings) {
++        if (!MOUSE.test(script.methods[b.methodOffset].name)) continue;
++        const v = script.variables[b.variableOffset];
++        if (v.value === this) return false;
++        if (v.isClass && v.members && v.members.some((i: number) => script.variables[i].value === this)) return false;
++      }
++    }
++    return true;
++  }
++
+   getDiv(): HTMLElement {
+     return this._div;
+   }
+diff --git a/packages/webamp-modern/src/skin/makiClasses/Movable.ts b/packages/webamp-modern/src/skin/makiClasses/Movable.ts
+index ceb544d..4bd5899 100644
+--- a/packages/webamp-modern/src/skin/makiClasses/Movable.ts
++++ b/packages/webamp-modern/src/skin/makiClasses/Movable.ts
+@@ -23,6 +23,7 @@ export default abstract class Movable extends GuiObj {
+     switch (key) {
+       case "move":
+         this._movable = toBool(value);
++        (this as any)._wdMoveExplicit = true;
+         this._renderCssCursor();
+         break;
+       case "resize":
 diff --git a/packages/webamp-modern/src/skin/makiClasses/Text.ts b/packages/webamp-modern/src/skin/makiClasses/Text.ts
 index 24901b9..006fab4 100644
 --- a/packages/webamp-modern/src/skin/makiClasses/Text.ts

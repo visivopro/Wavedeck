@@ -88,9 +88,9 @@
     getAnalyser() { return this._analyser; }
     setAudioSource() { /* the playlist bridge plays tracks through Wavedeck */ }
     getVolume() { const a = app(); return a ? a.state.volume / 100 : 0.75; }
-    setVolume(v) { const a = app(); if (!a) return; const n = Math.round(Math.max(0, Math.min(1, v)) * 100); if (n !== a.state.volume) { a.setVolume(n); this.trigger('volumechanged'); } }
+    setVolume(v) { const a = app(); if (!a || !Number.isFinite(v)) return; const n = Math.round(Math.max(0, Math.min(1, v)) * 100); if (n !== a.state.volume) { a.setVolume(n); this.trigger('volumechanged'); } }
     getBalance() { const a = app(); return a ? a.state.balance / 100 : 0; }
-    setBalance(b) { const a = app(); if (!a) return; if (Math.abs(b) > 1) b = b / 127; a.setBalance(Math.round(b * 100)); this.trigger('balancechange'); }
+    setBalance(b) { const a = app(); if (!a || !Number.isFinite(b)) return; if (Math.abs(b) > 1) b = b / 127; a.setBalance(Math.round(b * 100)); this.trigger('balancechange'); }
     getPlaybackRate() { const a = app(); return a ? a.engine.el.playbackRate : 1; }
     setPlaybackRate(v) { const a = app(); if (a) a.engine.el.playbackRate = Math.max(0.5, Math.min(4, v)); this.trigger('playbackratechange'); }
     play() { const a = app(); if (a) a.play(); }
@@ -111,7 +111,7 @@
       return (db + 12) / 24;
     }
     setEq(kind, value) {
-      const a = app(); if (!a) return;
+      const a = app(); if (!a || !Number.isFinite(value)) return;
       const db = Math.round((value * 24 - 12) * 10) / 10;
       if (kind === 'preamp') a.setPreamp(db); else { const i = Number(kind) - 1; if (i >= 0 && i < 10) a.setBand(i, db); }
       this._eqEmitter.trigger(kind);
@@ -149,4 +149,30 @@
   }
 
   window.__WAVEDECK_AUDIO__ = () => (window.__wdAudio = new RemoteAudio());
+
+  // ---------- scaling ----------
+  // The skin is scaled with CSS zoom on #web-amp. The engine does all its
+  // math (dragging windows, sliders, knobs, script mouse positions) in skin
+  // pixels, so every coordinate it can read is converted from screen pixels
+  // to skin pixels here, the same way browser page zoom would do it.
+  window.__wdScale = 1;
+  const S = () => window.__wdScale || 1;
+  const find = (proto, key) => { for (let p = proto; p; p = Object.getPrototypeOf(p)) { const d = Object.getOwnPropertyDescriptor(p, key); if (d) return d; } return null; };
+  for (const key of ['clientX', 'clientY', 'pageX', 'pageY', 'offsetX', 'offsetY', 'x', 'y', 'layerX', 'layerY']) {
+    const d = find(MouseEvent.prototype, key);
+    if (!d || !d.get) continue;
+    const get = d.get;
+    Object.defineProperty(MouseEvent.prototype, key, { configurable: true, enumerable: true, get() { return get.call(this) / S(); } });
+  }
+  const scaleRect = (r) => { const s = S(); return s === 1 ? r : new DOMRect(r.x / s, r.y / s, r.width / s, r.height / s); };
+  const gbcr = Element.prototype.getBoundingClientRect;
+  Element.prototype.getBoundingClientRect = function () { return scaleRect(gbcr.call(this)); };
+  const efp = Document.prototype.elementFromPoint;
+  Document.prototype.elementFromPoint = function (x, y) { return efp.call(this, x * S(), y * S()); };
+  const efps = Document.prototype.elementsFromPoint;
+  Document.prototype.elementsFromPoint = function (x, y) { return efps.call(this, x * S(), y * S()); };
+  for (const key of ['innerWidth', 'innerHeight']) {
+    const d = find(window, key);
+    if (d && d.get) { const get = d.get; Object.defineProperty(window, key, { configurable: true, enumerable: true, get() { return get.call(this) / S(); } }); }
+  }
 })();

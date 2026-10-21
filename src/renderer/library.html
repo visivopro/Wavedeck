@@ -10,6 +10,8 @@
 <body>
   <aside class="side">
     <div class="brand"><span class="logo">W</span> Library</div>
+    <div class="side-label">Your music</div>
+    <nav id="mine"><button id="nav-mixtapes"><i>✦</i><span>Mixtapes</span><span class="count" id="mx-count"></span></button></nav>
     <div class="side-label">Sources</div>
     <nav id="sources"></nav>
     <div class="side-label">Manage</div>
@@ -26,7 +28,9 @@
         <button data-view="albums">Albums</button>
         <button data-view="songs">Songs</button>
         <button data-view="genres">Genres</button>
+        <button data-view="playlists" id="tab-playlists" hidden>Playlists</button>
       </div>
+      <button class="btn" id="btn-shuffleall" title="Random songs from this whole source, topped up as you listen">⤮ Shuffle all</button>
       <div class="search"><input id="search" placeholder="Search artists, albums, songs" spellcheck="false"><kbd>Ctrl F</kbd></div>
       <select id="sort" title="Sort"></select>
     </header>

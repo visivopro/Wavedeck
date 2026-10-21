@@ -9,6 +9,15 @@
 <style>
   html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
   #web-amp { position: absolute; inset: 0; font-family: Arial, Helvetica, sans-serif; }
+  #wd-prompt { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.25); zoom: 1; }
+  #wd-prompt form { font: 13px "Segoe UI", system-ui, sans-serif; color: #e8ecf3; background: #1b1f28; border: 1px solid #343b4a; border-radius: 10px; padding: 16px 18px; width: 320px; box-shadow: 0 18px 40px rgba(0,0,0,.5); display: grid; gap: 8px; }
+  #wd-prompt b { font-size: 14px; }
+  #wd-prompt label { color: #9aa5b8; }
+  #wd-prompt input { font: inherit; color: inherit; background: #10131a; border: 1px solid #3a4253; border-radius: 6px; padding: 7px 9px; outline: none; }
+  #wd-prompt input:focus { border-color: #2de2c5; }
+  #wd-prompt div { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+  #wd-prompt button { font: inherit; color: inherit; background: #2a3140; border: 0; border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+  #wd-prompt button.ok { background: #2de2c5; color: #062b25; font-weight: 600; }
   #loading { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); font: 600 13px "Segoe UI", system-ui, sans-serif; color: #fff; background: rgba(13,15,20,.85); padding: 10px 16px; border-radius: 8px; pointer-events: none; }
 </style>
 <script src="modern/bridge.js"></script>
@@ -33,12 +42,75 @@
     const el = document.elementFromPoint(x, y);
     return !!(el && el !== document.body && el !== document.documentElement && el.id !== 'web-amp' && !/^ui-root/.test(el.id || ''));
   };
+  // Like Winamp, transparent pixels of a skin's images don't take the mouse:
+  // clicks fall through to whatever is underneath (a drawer behind the main
+  // window, or the desktop). Background layers with no image pass through too.
+  const PASS_TAGS = /^(LAYER|LAYOUT|GROUP|CONTAINER)$/;
+  const images = new Map();
+  const imageData = (url) => {
+    let e = images.get(url);
+    if (e) return e.data;
+    e = { data: null }; images.set(url, e);
+    const img = new Image(); img.crossOrigin = 'anonymous';
+    img.onload = () => { try { const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0); e.data = { x, w: c.width, h: c.height }; } catch { e.data = 'opaque'; } };
+    img.onerror = () => { e.data = 'opaque'; };
+    img.src = url;
+    return null;
+  };
+  // Is el's own image drawn (non-transparent) at x,y? null when it has no image.
+  const imageOpaqueAt = (el, x, y) => {
+    const cs = getComputedStyle(el);
+    if (cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') return false;
+    const m = /url\("?(.*?)"?\)/.exec(cs.backgroundImage || '');
+    if (!m) return null;
+    const r = el.getBoundingClientRect();
+    if (x < r.left || y < r.top || x >= r.right || y >= r.bottom) return false;
+    if (cs.backgroundSize && cs.backgroundSize !== 'auto' && cs.backgroundSize !== 'auto auto') return true;
+    const d = imageData(m[1]);
+    if (!d || d === 'opaque') return true;
+    let px = Math.floor(x - r.left - (parseFloat(cs.backgroundPositionX) || 0));
+    let py = Math.floor(y - r.top - (parseFloat(cs.backgroundPositionY) || 0));
+    if (/repeat/.test(cs.backgroundRepeat) && !/no-repeat/.test(cs.backgroundRepeat)) { px = ((px % d.w) + d.w) % d.w; py = ((py % d.h) + d.h) % d.h; }
+    if (px < 0 || py < 0 || px >= d.w || py >= d.h) return false;
+    return d.x.getImageData(px, py, 1, 1).data[3] !== 0;
+  };
+  const transparentAt = (el, x, y) => {
+    if (!PASS_TAGS.test(el.tagName)) return false;
+    const own = imageOpaqueAt(el, x, y);
+    if (own) return false;
+    if (el.tagName === 'LAYOUT') {
+      // a window is "there" wherever any of its pictures (including ghost ones) is drawn
+      for (const c of el.querySelectorAll('layer, animatedlayer')) {
+        if (imageOpaqueAt(c, x, y)) return false;
+      }
+      return true;
+    }
+    if (own === null) return el.tagName !== 'LAYER' || !el.childElementCount; // an empty frame or group
+    return true;
+  };
+  let passed = [];
+  const updatePass = (x, y) => {
+    for (const [el, pe] of passed) el.style.pointerEvents = pe;
+    passed = [];
+    for (let i = 0; i < 24; i++) {
+      const el = document.elementFromPoint(x, y);
+      if (!el || el === document.body || el.id === 'web-amp' || /^ui-root/.test(el.id || '')) break;
+      if (!transparentAt(el, x, y)) break;
+      passed.push([el, el.style.pointerEvents]);
+      el.style.pointerEvents = 'none';
+    }
+  };
   let held = false;
-  window.addEventListener('mousedown', () => { held = true; });
-  window.addEventListener('mouseup', () => { held = false; });
-  window.addEventListener('mousemove', (e) => { if (!held) setIgnore(!overSkin(e.clientX, e.clientY)); }, true);
+  window.addEventListener('mousedown', () => { held = true; }, true);
+  window.addEventListener('mouseup', () => { held = false; }, true);
+  window.addEventListener('mousemove', (e) => { if (!held) { updatePass(e.clientX, e.clientY); setIgnore(!overSkin(e.clientX, e.clientY)); } }, true);
   document.addEventListener('mouseleave', () => { if (!held) setIgnore(true); });
   setIgnore(true);
+
+  // ---------- size: same whole-pixel steps as the classic player ----------
+  const host = document.getElementById('web-amp');
+  const applyZoom = (z) => { window.__wdScale = z; host.style.zoom = z; };
+  applyZoom((app.state.modernK || app.baseK) / app.dpr);
 
   // ---------- load the skin ----------
   let wm;
@@ -127,6 +199,13 @@
     const a = String(action || '').toLowerCase();
     if (a === 'sysmenu' || (a === 'menu' && /^main$/i.test(param || ''))) { app.showMainMenu(); return; }
     if (a === 'minimize') { R.win.minimize(); return; }
+    // Winamp's Media Library and visualizer windows → Wavedeck's own
+    const p = String(param || '').toLowerCase();
+    if (a === 'toggle' || a === 'show') {
+      if (/guid:(ml|\{?6b0edf80-c9a5-11d3-9f26-00c04f39ffc6\}?)$/.test(p)) { app.openLibrary(); return; }
+      if (/guid:(avs|vis|\{?0000000a-000c-0010-ff7b-01014263450c\}?)$/.test(p)) { app.openMilkdrop(); return; }
+    }
+    if (a === 'prefs' || a === 'preferences' || a === 'options') { app.showMainMenu(); return; }
     if (a === 'close') {
       const c = document.activeElement && document.activeElement.closest('container');
       const id = c && (c.getAttribute('id') || '').toLowerCase();
@@ -135,10 +214,15 @@
     return dispatch(action, param, target);
   };
   // Right-click on a skin part that has no menu of its own opens Wavedeck's menu.
-  window.addEventListener('contextmenu', (e) => { if (!e.defaultPrevented) { e.preventDefault(); app.showMainMenu(); } });
+  // Right-click anywhere on a skin always opens Wavedeck's menu (skins, size,
+  // library, back to classic skin …), even on skins that use right-click themselves.
+  window.addEventListener('contextmenu', (e) => {
+    if (e.target && e.target.closest && e.target.closest('#wd-prompt')) return;
+    e.preventDefault(); e.stopImmediatePropagation(); app.showMainMenu();
+  }, true);
 
   // ---------- keyboard and drag & drop go to Wavedeck ----------
-  window.addEventListener('keydown', (e) => app.keyHandler && app.keyHandler(e));
+  window.addEventListener('keydown', (e) => { if (e.target && e.target.tagName === 'INPUT') return; app.keyHandler && app.keyHandler(e); });
   document.addEventListener('dragover', (e) => { e.preventDefault(); setIgnore(false); });
   document.addEventListener('drop', async (e) => {
     e.preventDefault();
@@ -158,9 +242,10 @@
     // and stay empty here, so don't show a bare frame for them.
     for (const c of conts()) if (c._dynamic && !c._componentGuid && c._visible !== false) { try { c.hide(); } catch {} }
     if (saved) {
+      const f = (saved.__z || 1) / window.__wdScale;
       for (const c of conts()) {
-        const p = saved[c._id]; if (!p) continue;
-        c.setLocation(p[0], p[1]);
+        const p = saved[c._id]; if (!p || c._id === '__z') continue;
+        c.setLocation(Math.round(p[0] * f), Math.round(p[1] * f));
         // windows the user closed (a skin's welcome or about window) stay closed
         if (p[2] === 0 && c._visible !== false && !/^main$/i.test(c._id)) { try { c.hide(); } catch {} }
         else if (p[2] === 1 && c._visible === false && !c._dynamic) { try { c.show(); } catch {} }
@@ -168,7 +253,7 @@
     } else {
       const vis = conts().filter(shown);
       const minX = Math.min(...vis.map((c) => c._x)), minY = Math.min(...vis.map((c) => c._y));
-      const ox = Math.max(0, (window.opener.screenX || 0) - window.screenX), oy = Math.max(0, (window.opener.screenY || 0) - window.screenY);
+      const ox = Math.max(0, (window.opener.screenX || 0) - window.screenX) / window.__wdScale, oy = Math.max(0, (window.opener.screenY || 0) - window.screenY) / window.__wdScale;
       if (isFinite(minX)) for (const c of conts()) c.setLocation(c._x - minX + ox, c._y - minY + oy);
       // Some skins (D-Reliction, for one) have a drawer that slides out of the
       // main window. Their other windows' default spots can sit on top of it,
@@ -186,7 +271,35 @@
       }
     }
     clamp();
+    report();
   };
+  // how big the skin is (in skin pixels), so the Size menu knows the largest size that fits
+  const report = () => {
+    const vis = conts().filter(shown);
+    if (!vis.length) return;
+    const x0 = Math.min(...vis.map((c) => c._x)), y0 = Math.min(...vis.map((c) => c._y));
+    const x1 = Math.max(...vis.map((c) => c._x + size(c)[0])), y1 = Math.max(...vis.map((c) => c._y + size(c)[1]));
+    const main = vis.find((c) => /^main$/i.test(c._id)) || vis[0];
+    app.modernBox = { w: Math.max(...vis.map((c) => size(c)[0])), h: Math.max(...vis.map((c) => size(c)[1])), mw: size(main)[0], mh: size(main)[1], all: [x1 - x0, y1 - y0] };
+  };
+  // Change size, keeping the main window's top-left corner where it is on screen
+  // and the other windows docked around it.
+  const setScale = (z) => {
+    const old = window.__wdScale;
+    if (Math.abs(z - old) < 1e-6) return;
+    const vis = conts();
+    const main = vis.find((c) => /^main$/i.test(c._id)) || vis[0];
+    const ax = main ? main._x : 0, ay = main ? main._y : 0;
+    const nx = Math.round((ax * old) / z), ny = Math.round((ay * old) / z);
+    applyZoom(z);
+    for (const c of vis) c.setLocation(nx + (c._x - ax), ny + (c._y - ay));
+    clamp(); remember(); report();
+  };
+  window.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    app.scaleStep(e.deltaY < 0 ? 1 : -1);
+  }, { passive: false });
   // keep every skin window on screen
   const clamp = () => {
     const W = innerWidth, H = innerHeight;
@@ -200,13 +313,39 @@
   const remember = () => {
     const m = {};
     for (const c of conts()) m[c._id] = [c._x, c._y, c._visible === false ? 0 : 1];
+    m.__z = window.__wdScale;
     try { localStorage.setItem(layoutKey, JSON.stringify(m)); } catch {}
   };
   setTimeout(place, 250);
-  window.addEventListener('mouseup', () => setTimeout(() => { clamp(); remember(); }, 60));
+  window.addEventListener('mouseup', () => setTimeout(() => { clamp(); remember(); report(); }, 60));
   window.addEventListener('resize', clamp);
 
-  window.wavedeckModern = { wm, ui };
+  // Text prompts (naming a mixtape …) while the classic window is hidden.
+  const prompt = (title, label, value = '', placeholder = '') => new Promise((resolve) => {
+    const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const o = document.createElement('div'); o.id = 'wd-prompt';
+    o.innerHTML = `<form><b>${esc(title)}</b><label>${esc(label)}</label><input spellcheck="false"><div><button type="button" class="c">Cancel</button><button class="ok">OK</button></div></form>`;
+    document.body.appendChild(o);
+    setIgnore(false);
+    window.focus();
+    const inp = o.querySelector('input'); inp.value = value; inp.placeholder = placeholder; inp.focus(); inp.select();
+    const done = (v) => { o.remove(); resolve(v); };
+    o.querySelector('form').onsubmit = (e) => { e.preventDefault(); done(inp.value.trim()); };
+    o.querySelector('.c').onclick = () => done(null);
+    inp.onkeydown = (e) => { if (e.key === 'Escape') done(null); e.stopPropagation(); };
+  });
+  // diagnostics: why a point is or isn't treated as see-through
+  const passInfo = (x, y) => {
+    for (const [el, pe] of passed) el.style.pointerEvents = pe;
+    passed = [];
+    return document.elementsFromPoint(x, y).slice(0, 8).map((el) => {
+      const cs = getComputedStyle(el); const m = /url\("?(.*?)"?\)/.exec(cs.backgroundImage || '');
+      const d = m && images.get(m[1]);
+      const r = el.getBoundingClientRect();
+      return `${el.tagName}#${el.id} transparent=${transparentAt(el, x, y)} img=${m ? (d ? (d.data === 'opaque' ? 'opaque' : d.data ? d.data.w + 'x' + d.data.h : 'loading') : 'none') : '-'} rect=${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)}x${Math.round(r.height)} pos=${cs.backgroundPositionX},${cs.backgroundPositionY} size=${cs.backgroundSize}`;
+    });
+  };
+  window.wavedeckModern = { wm, ui, setScale, prompt, passInfo };
   app.modernReady(skinPath);
 })();
 </script>
