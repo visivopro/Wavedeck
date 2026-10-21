@@ -604,12 +604,12 @@ class App {
   showAbout() { this.openTool('about'); }
 
   // tiny in-window prompt
-  prompt(title, label, value = '') {
+  prompt(title, label, value = '', placeholder = '') {
     return new Promise((resolve) => {
       const o = document.getElementById('overlay');
       o.innerHTML = `<form class="prompt"><b>${title}</b><label>${label}</label><input spellcheck="false"><div><button type="button" class="c">Cancel</button><button>OK</button></div></form>`;
       o.hidden = false;
-      const inp = o.querySelector('input'); inp.value = value; inp.focus(); inp.select();
+      const inp = o.querySelector('input'); inp.value = value; inp.placeholder = placeholder; inp.focus(); inp.select();
       const done = (v) => { o.hidden = true; o.innerHTML = ''; resolve(v); };
       o.querySelector('form').onsubmit = (e) => { e.preventDefault(); done(inp.value.trim()); };
       o.querySelector('.c').onclick = () => done(null);
@@ -876,7 +876,7 @@ class App {
 
   // ---------------- mixtapes ----------------
   async newMixtape(tracks = []) {
-    const name = await this.prompt('New mixtape', 'Name your mixtape:', this.mixtapes.nextName());
+    const name = await this.prompt('New mixtape', 'Name your mixtape:', '', 'e.g. Road Trip, Sunday Morning');
     if (name === null) return null;
     const m = await this.mixtapes.create(name || this.mixtapes.nextName(), tracks);
     this.flashMsg(tracks.length ? `SAVED ${tracks.length} TO ${m.name}` : `CREATED ${m.name}`);

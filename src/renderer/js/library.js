@@ -407,8 +407,8 @@ async function toMixtape(getTracks) {
   if (!id) return;
   const tracks = await getTracks();
   if (id !== '__new') { await p.addToMixtape(id, tracks); toast(`Added to ${tapes.find((m) => m.id === id)?.name}`); return; }
-  const d = modal(`<h2>New mixtape</h2><p class="hint">${tracks.length} song${tracks.length === 1 ? '' : 's'} will be added.</p><div class="row"><input id="mx-name" spellcheck="false"></div><div class="foot"><button class="btn" id="mx-cancel">Cancel</button><button class="btn primary" id="mx-ok">Create mixtape</button></div>`);
-  const inp = d.querySelector('#mx-name'); inp.value = p.nextMixtapeName(); inp.focus(); inp.select();
+  const d = modal(`<h2>Name your mixtape</h2><p class="hint">${tracks.length} song${tracks.length === 1 ? '' : 's'} will be added.</p><div class="row"><input id="mx-name" spellcheck="false"></div><div class="foot"><button class="btn" id="mx-cancel">Cancel</button><button class="btn primary" id="mx-ok">Create mixtape</button></div>`);
+  const inp = d.querySelector('#mx-name'); inp.placeholder = 'Name your mixtape, e.g. Road Trip'; inp.focus();
   const ok = async () => { const m = await p.createMixtape(inp.value || p.nextMixtapeName(), tracks); closeModal(); toast(`Created ${m.name}`); };
   d.querySelector('#mx-ok').onclick = ok; d.querySelector('#mx-cancel').onclick = closeModal;
   inp.onkeydown = (e) => { if (e.key === 'Enter') ok(); };
