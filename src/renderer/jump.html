@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Jump to file</title><link rel="stylesheet" href="css/tools.css">
+<style>
+  #list { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
+  .r { display: flex; gap: 10px; padding: 6px 10px; border-radius: 6px; cursor: default; white-space: nowrap; }
+  .r .n { color: var(--faint); width: 44px; text-align: right; font-variant-numeric: tabular-nums; flex: none; }
+  .r .t { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  .r .d { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .r:hover { background: var(--hover); }
+  .r.on { background: #1a2a32; box-shadow: inset 2px 0 0 var(--accent); }
+  .r.cur .t { color: var(--accent); }
+  .foot { display: flex; gap: 8px; justify-content: flex-end; padding: 10px 16px; border-top: 1px solid var(--line); }
+</style></head>
+<body>
+<div class="pad"><input id="q" placeholder="Type to search the playlist" autofocus spellcheck="false"></div>
+<div id="list"></div>
+<div class="foot"><span class="muted" id="count" style="margin-right:auto;align-self:center"></span><button id="close">Close</button><button class="primary" id="play">Play</button></div>
+<script>
+const P = window.opener.wavedeckPlayer;
+const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const fmt = (s) => s ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '';
+const items = P.getPlaylist().map((t, i) => ({ i, t, hay: `${t.displayTitle} ${t.album || ''} ${t.path || t.url || ''}`.toLowerCase() }));
+const cur = P.getState().current;
+let shown = [], sel = 0;
+function render() {
+  const words = document.getElementById('q').value.toLowerCase().split(/\s+/).filter(Boolean);
+  shown = items.filter((x) => words.every((w) => x.hay.includes(w)));
+  sel = Math.min(sel, Math.max(0, shown.length - 1));
+  const list = document.getElementById('list');
+  list.innerHTML = shown.slice(0, 2000).map((x, k) => `<div class="r ${k === sel ? 'on' : ''} ${x.i === cur ? 'cur' : ''}" data-k="${k}"><span class="n">${x.i + 1}.</span><span class="t">${esc(x.t.displayTitle)}</span><span class="d">${fmt(x.t.duration)}</span></div>`).join('');
+  document.getElementById('count').textContent = `${shown.length} of ${items.length}`;
+  list.querySelector('.on')?.scrollIntoView({ block: 'nearest' });
+}
+function go() { if (shown[sel]) { P.playIndex(shown[sel].i); window.close(); } }
+document.getElementById('q').oninput = () => { sel = 0; render(); };
+document.getElementById('list').onclick = (e) => { const r = e.target.closest('.r'); if (r) { sel = +r.dataset.k; render(); } };
+document.getElementById('list').ondblclick = go;
+document.getElementById('play').onclick = go;
+document.getElementById('close').onclick = () => window.close();
+addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown') { sel = Math.min(shown.length - 1, sel + 1); render(); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { sel = Math.max(0, sel - 1); render(); e.preventDefault(); }
+  else if (e.key === 'Enter') go();
+  else if (e.key === 'Escape') window.close();
+});
+sel = Math.max(0, items.findIndex((x) => x.i === cur));
+render();
+</script>
+</body></html>

@@ -1,0 +1,50 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>File info</title><link rel="stylesheet" href="css/tools.css">
+<style>
+  .head { display: flex; gap: 16px; padding: 18px; border-bottom: 1px solid var(--line); }
+  .art { width: 120px; height: 120px; border-radius: 8px; background: var(--panel2); flex: none; overflow: hidden; display: grid; place-items: center; color: var(--faint); font-size: 36px; font-weight: 700; }
+  .art img { width: 100%; height: 100%; object-fit: cover; }
+  h1 { font-size: 18px; margin: 4px 0 2px; font-weight: 600; }
+  dl { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; margin: 0; padding: 16px 18px; overflow-y: auto; flex: 1; user-select: text; }
+  dt { color: var(--muted); } dd { margin: 0; word-break: break-all; }
+  .foot { display: flex; gap: 8px; justify-content: flex-end; padding: 10px 16px; border-top: 1px solid var(--line); }
+  .pager { margin-right: auto; color: var(--muted); align-self: center; }
+</style></head>
+<body>
+<div class="head"><div class="art" id="art">♪</div><div><div class="muted" id="kind"></div><h1 id="title"></h1><div id="artist"></div><div class="muted" id="album"></div></div></div>
+<dl id="dl"></dl>
+<div class="foot"><span class="pager" id="pager"></span><button id="prev">‹</button><button id="next">›</button><button id="folder">Show in folder</button><button class="primary" id="close">Close</button></div>
+<script>
+const P = window.opener.wavedeckPlayer;
+const sel = P.getSelected();
+const list = sel.length ? sel : [P.getCurrent()].filter(Boolean);
+let i = 0;
+const fmt = (s) => s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : '—';
+const $ = (id) => document.getElementById(id);
+async function show() {
+  const t = list[i]; if (!t) return;
+  $('title').textContent = t.title || t.displayTitle;
+  $('artist').textContent = t.artist || '';
+  $('album').textContent = [t.album, t.year].filter(Boolean).join(' · ');
+  $('kind').textContent = t.url ? 'Network stream' : 'Local file';
+  const rows = [
+    ['Album artist', t.albumartist], ['Track', t.track && (t.disc ? `${t.disc}-${t.track}` : t.track)], ['Genre', t.genre], ['Length', fmt(t.duration)],
+    ['Format', t.codec], ['Bitrate', t.bitrate && `${t.bitrate} kbps`], ['Sample rate', t.sampleRate && `${t.sampleRate.toLocaleString()} Hz`],
+    ['Channels', t.channels === 1 ? 'Mono' : t.channels === 2 ? 'Stereo' : t.channels], ['Lossless', t.lossless ? 'Yes' : t.codec ? 'No' : ''],
+    ['Source', t.source], ['Location', t.path || (t.url || '').replace(/([?&](t|s|u)=)[^&]*/g, '$1…')],
+  ].filter((r) => r[1]);
+  $('dl').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${String(v).replace(/</g, '&lt;')}</dd>`).join('');
+  $('pager').textContent = list.length > 1 ? `${i + 1} of ${list.length}` : '';
+  $('prev').style.display = $('next').style.display = list.length > 1 ? '' : 'none';
+  $('folder').style.display = t.path ? '' : 'none';
+  $('art').innerHTML = '♪';
+  if (t.path) { const c = await window.wavedeck.cover(t.path); if (c && list[i] === t) $('art').innerHTML = `<img src="${c}">`; }
+}
+$('prev').onclick = () => { i = (i - 1 + list.length) % list.length; show(); };
+$('next').onclick = () => { i = (i + 1) % list.length; show(); };
+$('folder').onclick = () => window.wavedeck.showInFolder(list[i].path);
+$('close').onclick = () => window.close();
+addEventListener('keydown', (e) => { if (e.key === 'Escape') window.close(); });
+show();
+</script>
+</body></html>

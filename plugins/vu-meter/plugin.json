@@ -1,0 +1,7 @@
+{
+  "name": "VU Meter",
+  "version": "1.0.0",
+  "author": "Wavedeck",
+  "description": "Adds a stereo VU meter mode to the main window visualizer.",
+  "main": "index.js"
+}

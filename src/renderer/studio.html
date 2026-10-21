@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Wavedeck Theme Studio</title>
+<link rel="stylesheet" href="css/studio.css">
+<script src="vendor/jszip.min.js"></script>
+<script type="module" src="js/studio.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="title"><span class="logo">W</span><div><b>Theme Studio</b><small>Changes show live on the player</small></div></div>
+    <input id="name" class="name" maxlength="40" spellcheck="false" placeholder="Theme name">
+  </header>
+
+  <main id="scroll">
+    <section>
+      <h3>Describe it</h3>
+      <div class="row"><input id="describe" placeholder="e.g. neon pink tokyo night, walnut 70s stereo, icy glass" spellcheck="false"><button id="describe-go" class="btn">Apply</button></div>
+      <p class="hint" id="describe-msg"></p>
+    </section>
+
+    <section>
+      <h3>Start from a style</h3>
+      <div class="presets" id="presets"></div>
+    </section>
+
+    <section>
+      <h3>Colors</h3>
+      <div class="colors">
+        <label class="color"><input type="color" id="accent"><span>Accent</span></label>
+        <label class="color"><input type="color" id="accent2"><span>Highlight</span></label>
+        <label class="color"><input type="color" id="base"><span>Body</span></label>
+      </div>
+      <div class="swatches" id="swatches"></div>
+      <div class="row"><button class="btn" id="from-image">Colors from a picture…</button><button class="btn ghost" id="use-as-bg" hidden>Use that picture as the background too</button></div>
+      <h4>Display</h4>
+      <div class="chips" id="display"></div>
+    </section>
+
+    <section>
+      <h3>Finish</h3>
+      <div class="chips" id="material"></div>
+      <h4>Buttons</h4>
+      <div class="chips" id="buttons"></div>
+      <h4>Lettering</h4>
+      <div class="chips" id="labels"></div>
+    </section>
+
+    <section>
+      <h3>Shape &amp; light</h3>
+      <label class="slider"><span>Bevel depth</span><input type="range" id="bevel" min="0" max="3" step="1"><output></output></label>
+      <label class="slider"><span>Roundness</span><input type="range" id="roundness" min="0" max="4" step="1"><output></output></label>
+      <label class="slider"><span>Glow</span><input type="range" id="glow" min="0" max="1" step="0.05"><output></output></label>
+      <label class="slider" id="texture-row"><span>Texture</span><input type="range" id="texture" min="0" max="1" step="0.05"><output></output></label>
+    </section>
+
+    <section>
+      <h3>Background picture</h3>
+      <div class="bg-row"><div class="bg-thumb" id="bg-thumb">None</div>
+        <div class="bg-actions"><button class="btn" id="bg-pick">Choose picture…</button><button class="btn ghost" id="bg-remove">Remove</button></div></div>
+      <label class="slider"><span>Darken</span><input type="range" id="bg-dim" min="0" max="0.9" step="0.05"><output></output></label>
+      <label class="slider"><span>Blur</span><input type="range" id="bg-blur" min="0" max="1" step="0.05"><output></output></label>
+    </section>
+
+    <section>
+      <h3>Details</h3>
+      <div class="grid2"><label>Title bar text<input id="titleText" maxlength="16" spellcheck="false"></label><label>Your name (author)<input id="author" maxlength="40" spellcheck="false"></label></div>
+      <p class="hint">Want to hand-paint it? <a href="#" id="export-sheets">Export the sprite sheets</a> and edit them in any image editor.</p>
+    </section>
+  </main>
+
+  <footer>
+    <button class="btn" id="surprise" title="Random, but tasteful">✦ Surprise me</button>
+    <button class="btn ghost" id="undo" title="Undo (Ctrl+Z)">↶ Undo</button>
+    <span class="spacer"></span>
+    <button class="btn ghost" id="export">Export…</button>
+    <button class="btn primary" id="save">Save theme</button>
+  </footer>
+  <input type="file" id="file" accept="image/*" hidden>
+  <div id="toast" hidden></div>
+</body>
+</html>

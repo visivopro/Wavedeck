@@ -1,0 +1,12 @@
+:root { --bg:#0d0f14; --panel:#12151c; --panel2:#171b24; --line:#232835; --hover:#1c212c; --text:#d7deef; --muted:#7d869e; --faint:#4b5266; --accent:#2de2c5; --amber:#ffb547; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 13px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; display: flex; flex-direction: column; user-select: none; }
+input { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 11px; outline: none; width: 100%; }
+input:focus { border-color: var(--accent); }
+button { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 7px; padding: 6px 14px; cursor: pointer; }
+button:hover { border-color: #39404f; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #062a25; font-weight: 600; }
+::-webkit-scrollbar { width: 10px; } ::-webkit-scrollbar-thumb { background: #262b38; border-radius: 6px; border: 2px solid var(--bg); }
+.pad { padding: 14px 16px; }
+.muted { color: var(--muted); }

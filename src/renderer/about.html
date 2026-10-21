@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>About Wavedeck</title><link rel="stylesheet" href="css/tools.css">
+<style>
+  body { align-items: center; justify-content: center; text-align: center; padding: 24px; gap: 6px; }
+  .logo { width: 64px; height: 64px; border-radius: 16px; background: var(--amber); color: #2a1a00; font-size: 38px; font-weight: 800; display: grid; place-items: center; margin-bottom: 8px; box-shadow: 0 10px 30px rgba(255,181,71,.25); }
+  h1 { margin: 0; font-size: 22px; font-weight: 600; }
+  p { margin: 4px 0; max-width: 360px; }
+  .small { font-size: 11px; color: var(--faint); margin-top: 14px; line-height: 1.6; }
+</style></head>
+<body>
+<div class="logo">W</div>
+<h1>Wavedeck</h1>
+<div class="muted" id="ver"></div>
+<p>A classic-style music player for FLAC and MP3, with skins, an equalizer, visualizations and a modern media library.</p>
+<div class="small">Free software. Built with Electron, butterchurn (Milkdrop visualizations), music-metadata and JSZip, each under the MIT license.<br>
+Loads classic Winamp&nbsp;2.x skins (.wsz). Winamp is a trademark of its respective owner; Wavedeck is an independent project and is not affiliated with or endorsed by it.</div>
+<button class="primary" style="margin-top:14px" onclick="window.close()">Close</button>
+<script>window.wavedeck.version().then((v) => { document.getElementById('ver').textContent = 'Version ' + v; });
+addEventListener('keydown', (e) => { if (e.key === 'Escape' || e.key === 'Enter') window.close(); });</script>
+</body></html>

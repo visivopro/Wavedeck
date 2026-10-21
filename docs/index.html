@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wavedeck: a classic music player for Windows</title>
+<meta name="description" content="Free classic-style music player for Windows. FLAC and MP3, Winamp skin support, 10-band EQ, Milkdrop visualizations, a modern media library with NAS streaming, and Theme Studio.">
+<meta property="og:title" content="Wavedeck">
+<meta property="og:description" content="Classic player. Modern library. A free music player for Windows.">
+<meta property="og:image" content="https://visivopro.github.io/Wavedeck/assets/player-walnut.webp">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="#top"><img src="assets/icon.png" alt="" width="30" height="30"><span>Wavedeck</span></a>
+  <nav>
+    <a href="#library">Library</a>
+    <a href="#studio">Theme Studio</a>
+    <a href="#features">Features</a>
+    <a href="https://github.com/visivopro/Wavedeck">GitHub</a>
+  </nav>
+  <a class="btn small" href="#download">Download</a>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="hero-copy">
+      <h1>Classic player. Modern library.</h1>
+      <p class="lede">Wavedeck is a free music player for Windows. FLAC and MP3, a 10-band equalizer, Milkdrop visualizations and the classic skins you remember, plus a media library that sorts your collection by artist and album and plays straight from your NAS.</p>
+      <div class="cta">
+        <a class="btn" href="https://github.com/visivopro/Wavedeck/releases/latest/download/Wavedeck-Setup.exe">Download for Windows</a>
+        <a class="link" href="https://github.com/visivopro/Wavedeck/releases/latest/download/Wavedeck-Portable.exe">Portable version, no install</a>
+      </div>
+      <p class="fine">Free and open source. Windows 10 and 11, 64-bit.</p>
+    </div>
+
+    <figure class="stage">
+      <div class="glow" aria-hidden="true"></div>
+      <img id="player" src="assets/player-walnut.webp" width="550" height="870" alt="Wavedeck with the Walnut Hi-Fi theme: player, equalizer and playlist">
+      <figcaption>
+        <div class="themes" role="group" aria-label="Preview a theme"></div>
+        <p>Every one of these was made in Theme Studio. No drawing involved.</p>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section class="feature" id="library">
+    <div class="copy">
+      <h2>Your collection, sorted by artist, album and song</h2>
+      <p>Point Wavedeck at your music folders: local drives, USB drives or a network share like <code>\\NAS\Music</code>. It reads your tags and cover art and builds a library you can browse by artist, album, song or genre, with search across all of it.</p>
+      <p>Running Navidrome, Jellyfin or another Subsonic-compatible server? Connect it once and stream from it, no copying files around.</p>
+      <p>Rescans only touch files that changed, so big collections stay quick.</p>
+    </div>
+    <img class="shot wide" src="assets/library-artist.webp" width="1200" height="720" loading="lazy" alt="The Media Library window showing an artist with two albums">
+  </section>
+
+  <section class="feature flip" id="studio">
+    <div class="copy">
+      <h2>Make a theme without drawing a pixel</h2>
+      <p>Theme Studio builds a complete skin from choices instead of artwork. Start from a style, pick your colors or pull them from a photo, choose a finish like brushed metal, wood or frosted glass, and set the bevels, roundness and glow with sliders.</p>
+      <p>Type something like “neon pink tokyo night” to get a starting point, or hit Surprise me. Every change shows up live on the player.</p>
+      <p>Themes are redrawn at whatever size you scale the player to, so they stay sharp on a 4K screen. Save one and share the small <code>.wdskin</code> file.</p>
+    </div>
+    <div class="pair">
+      <img class="shot" src="assets/studio-top.webp" width="470" height="860" loading="lazy" alt="Theme Studio window with style presets">
+      <img class="shot" src="assets/player-studio-preview.webp" width="550" height="870" loading="lazy" alt="The player showing the theme being edited">
+    </div>
+  </section>
+
+  <section class="specs" id="features">
+    <h2>Everything you’d expect from the classic</h2>
+    <dl>
+      <div><dt>Sound</dt><dd>FLAC, MP3, OGG, Opus, WAV and M4A. Preamp plus 10-band equalizer with 18 presets, your own presets, and per-song EQ memory.</dd></div>
+      <div><dt>Skins</dt><dd>Loads classic <code>.wsz</code> skins as-is. Drag one onto the player to apply it.</dd></div>
+      <div><dt>Visuals</dt><dd>Spectrum analyzer and oscilloscope in the main window, and a full visualization window with thousands of Milkdrop presets.</dd></div>
+      <div><dt>Sizing</dt><dd>Drag any edge to scale the whole player. Sizes snap to whole pixels so skins never go blurry.</dd></div>
+      <div><dt>Playlists</dt><dd>Drag and drop, reorder, sort, crop, remove duplicates, jump to file, and M3U or PLS load and save.</dd></div>
+      <div><dt>Keyboard</dt><dd>Z X C V B for transport, L to open, J to jump, plus global media keys.</dd></div>
+      <div><dt>Plugins</dt><dd>JavaScript plugins can add visualizers, audio effects and menu items. A “now playing” file for OBS is included.</dd></div>
+      <div><dt>Library</dt><dd>Artist, album, song and genre views, cover art, search, and streaming from your own music server.</dd></div>
+    </dl>
+  </section>
+
+  <section class="download" id="download">
+    <h2>Download Wavedeck</h2>
+    <p>Free, no account, no ads.</p>
+    <div class="cta">
+      <a class="btn" href="https://github.com/visivopro/Wavedeck/releases/latest/download/Wavedeck-Setup.exe">Download installer</a>
+      <a class="btn ghost" href="https://github.com/visivopro/Wavedeck/releases/latest/download/Wavedeck-Portable.exe">Download portable</a>
+    </div>
+    <p class="fine">Windows 10 or 11, 64-bit. The first time you run it, Windows may show a SmartScreen notice because the app isn’t code-signed yet. Choose “More info”, then “Run anyway”.</p>
+    <p class="fine"><a href="https://github.com/visivopro/Wavedeck/releases">All releases and release notes</a></p>
+  </section>
+</main>
+
+<footer>
+  <p>Wavedeck is free software under the MIT license, made by Nicholas Hipp Barros.</p>
+  <p><a href="https://github.com/visivopro/Wavedeck">Source code</a> <a href="https://github.com/visivopro/Wavedeck/blob/main/docs/SKINS.md">Skin guide</a> <a href="https://github.com/visivopro/Wavedeck/blob/main/docs/PLUGINS.md">Plugin guide</a> <a href="https://github.com/visivopro/Wavedeck/issues">Report a problem</a></p>
+  <p class="fine">Wavedeck is an independent project and is not affiliated with or endorsed by Winamp or its owners. It reads the publicly documented classic skin format; all built-in artwork is original.</p>
+</footer>
+<script src="site.js"></script>
+</body>
+</html>

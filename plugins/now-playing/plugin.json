@@ -1,0 +1,7 @@
+{
+  "name": "Now Playing file",
+  "version": "1.0.0",
+  "author": "Wavedeck",
+  "description": "Writes the current song to nowplaying.txt so OBS or other streaming tools can show it.",
+  "main": "index.js"
+}

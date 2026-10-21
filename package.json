@@ -1,0 +1,119 @@
+{
+  "name": "wavedeck-player",
+  "version": "1.2.0",
+  "description": "A classic-style FLAC/MP3 player with skins, EQ, visualizations and a media library.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --x64 --publish never"
+  },
+  "author": "Nicholas Hipp Barros",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^44.9.2",
+    "electron-builder": "^26.15.3",
+    "butterchurn": "^2.6.7",
+    "butterchurn-presets": "^2.4.7",
+    "jszip": "^3.10.2"
+  },
+  "dependencies": {
+    "music-metadata": "^7.14.0"
+  },
+  "build": {
+    "appId": "com.wavedeck.player",
+    "productName": "Wavedeck",
+    "copyright": "Copyright © 2026 Nicholas Hipp Barros",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "!src/devtest.js",
+      "plugins/**/*",
+      "skins/**/*",
+      "build/icon.png",
+      "package.json",
+      "LICENSE"
+    ],
+    "asarUnpack": [],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": true,
+      "legalTrademarks": ""
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Wavedeck",
+      "artifactName": "Wavedeck-Setup.exe",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    },
+    "portable": {
+      "artifactName": "Wavedeck-Portable.exe"
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "mp3",
+          "flac",
+          "ogg",
+          "opus",
+          "wav",
+          "m4a",
+          "aac"
+        ],
+        "name": "Audio file",
+        "description": "Audio file",
+        "role": "Viewer",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": [
+          "m3u",
+          "m3u8",
+          "pls"
+        ],
+        "name": "Playlist",
+        "description": "Playlist",
+        "role": "Viewer",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": [
+          "wsz",
+          "wdskin"
+        ],
+        "name": "Wavedeck skin",
+        "description": "Player skin",
+        "role": "Viewer",
+        "icon": "build/icon.ico"
+      }
+    ],
+    "publish": []
+  },
+  "productName": "Wavedeck",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/visivopro/Wavedeck.git"
+  },
+  "homepage": "https://visivopro.github.io/Wavedeck/"
+}

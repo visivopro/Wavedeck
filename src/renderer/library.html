@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Wavedeck — Media Library</title>
+<link rel="stylesheet" href="css/library.css">
+<style id="skin-css"></style>
+<script type="module" src="js/library.js"></script>
+</head>
+<body>
+  <aside class="side">
+    <div class="brand"><span class="logo">W</span> Library</div>
+    <div class="side-label">Sources</div>
+    <nav id="sources"></nav>
+    <div class="side-label">Manage</div>
+    <button class="side-btn" id="btn-folders"><i>▤</i> Music folders</button>
+    <button class="side-btn" id="btn-servers"><i>⇄</i> Network servers</button>
+    <button class="side-btn" id="btn-rescan"><i>↻</i> Rescan library</button>
+    <div class="scan" id="scan" hidden><div class="scan-text"></div><div class="bar"><span></span></div></div>
+    <div class="side-foot" id="stats"></div>
+  </aside>
+  <main>
+    <header class="top">
+      <div class="tabs" id="tabs">
+        <button data-view="artists" class="on">Artists</button>
+        <button data-view="albums">Albums</button>
+        <button data-view="songs">Songs</button>
+        <button data-view="genres">Genres</button>
+      </div>
+      <div class="search"><input id="search" placeholder="Search artists, albums, songs" spellcheck="false"><kbd>Ctrl F</kbd></div>
+      <select id="sort" title="Sort"></select>
+    </header>
+    <section id="view"></section>
+  </main>
+  <div id="modal" hidden></div>
+  <div id="ctx" hidden></div>
+  <div id="toast" hidden></div>
+</body>
+</html>
