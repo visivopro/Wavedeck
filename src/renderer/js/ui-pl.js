@@ -3,6 +3,7 @@ import { box, canvasBox, sprite, pressable, localPoint, dragging, el } from './d
 import { drawSkinText, textBg, fmtTime } from './text.js';
 
 const ROW_H = 13;
+const TAB_H = 13;
 
 export class PlaylistWindow {
   constructor(app, root) {
@@ -15,6 +16,9 @@ export class PlaylistWindow {
   get skin() { return this.app.skin; }
   get rows() { return this.app.state.plRows; }
   get height() { return 20 + this.rows * 29 + 38; }
+  get mode() { return this.app.state.plMode === 'browse' ? 'browse' : 'playlist'; }
+  get listH() { return this.rows * 29 - TAB_H; }
+  get browser() { return this.app.browser; }
 
   build() {
     const r = this.root, app = this.app;
@@ -35,17 +39,33 @@ export class PlaylistWindow {
       this.sides.push(['r', box(r, 255, 20 + k * 29, 20, 29)]);
     }
 
-    // track list
-    this.list = el('div', 'pl-list interactive', r, { left: '12px', top: '20px', width: '243px', height: rows * 29 + 'px' });
+    // tabs: Playlist | Browse  (+ where you are, in Browse)
+    this.tabs = el('div', 'pl-tabs interactive', r, { left: '12px', top: '20px', width: '243px', height: TAB_H + 'px' });
+    this.tabPl = el('span', 'pl-tab', this.tabs); this.tabPl.textContent = 'Playlist';
+    this.tabBr = el('span', 'pl-tab', this.tabs); this.tabBr.textContent = 'Browse';
+    this.crumb = el('span', 'pl-crumb', this.tabs);
+    this.tabPl.addEventListener('mousedown', (e) => { e.stopPropagation(); app.setPlMode('playlist'); });
+    this.tabBr.addEventListener('mousedown', (e) => { e.stopPropagation(); app.setPlMode('browse'); });
+    this.crumb.addEventListener('mousedown', (e) => { e.stopPropagation(); if (this.mode === 'browse') this.browser.back(); });
+    this.crumb.title = 'Back';
+
+    // track list / browser
+    this.list = el('div', 'pl-list interactive', r, { left: '12px', top: 20 + TAB_H + 'px', width: '243px', height: this.listH + 'px' });
     this.list.addEventListener('wheel', (e) => { e.stopPropagation(); this.scrollBy(Math.sign(e.deltaY) * 3); }, { passive: true });
-    this.list.addEventListener('mousedown', (e) => this.onListDown(e));
+    this.list.addEventListener('mousedown', (e) => (this.mode === 'browse' ? this.onBrowseDown(e) : this.onListDown(e)));
     this.list.addEventListener('dblclick', (e) => {
       const i = this.rowAt(e);
+      if (this.mode === 'browse') { if (i !== null && i < this.browser.items.length) this.browser.activate(i); return; }
       if (i !== null && i < app.state.playlist.length) app.playIndex(i);
     });
     this.list.addEventListener('contextmenu', (e) => {
       e.preventDefault(); e.stopPropagation();
       const i = this.rowAt(e);
+      if (this.mode === 'browse') {
+        const it = i !== null ? this.browser.items[i] : null;
+        if (it) { this.browser.sel = i; this.renderList(); app.showBrowseMenu(it, i); }
+        return;
+      }
       if (i !== null && i < app.state.playlist.length && !app.state.selected.has(i)) { app.select([i]); }
       app.showPlaylistMenu();
     });
@@ -57,7 +77,7 @@ export class PlaylistWindow {
       dragging(e, (m) => {
         const p = localPoint(this.scrollTrack, m, 8, rows * 29);
         const max = this.maxScroll();
-        this.scroll = Math.round(Math.max(0, Math.min(1, (p.y - 9) / (rows * 29 - 18))) * max);
+        this.offset = Math.round(Math.max(0, Math.min(1, (p.y - 9) / (rows * 29 - 18))) * max);
         this.handle.classList.add('down');
         this.renderList();
       }, () => { this.handle.classList.remove('down'); this.renderList(); });
@@ -102,20 +122,33 @@ export class PlaylistWindow {
     this.update(true);
   }
 
-  maxScroll() { return Math.max(0, this.app.state.playlist.length - this.visibleRows()); }
-  visibleRows() { return Math.floor((this.rows * 29 - 6) / ROW_H); }
-  scrollBy(n) { this.scroll = Math.max(0, Math.min(this.maxScroll(), this.scroll + n)); this.renderList(); }
-  ensureVisible(i) {
+  count() { return this.mode === 'browse' ? (this.browser ? this.browser.items.length : 0) : this.app.state.playlist.length; }
+  get offset() { return this.mode === 'browse' ? this.browser.scroll : this.scroll; }
+  set offset(v) { if (this.mode === 'browse') this.browser.scroll = v; else this.scroll = v; }
+  maxScroll() { return Math.max(0, this.count() - this.visibleRows()); }
+  visibleRows() { return Math.floor((this.listH - 6) / ROW_H); }
+  scrollBy(n) { this.offset = Math.max(0, Math.min(this.maxScroll(), this.offset + n)); this.renderList(); }
+  ensureVisible(i, inBrowse = false) {
+    if (inBrowse !== (this.mode === 'browse')) return;
     const v = this.visibleRows();
-    if (i < this.scroll) this.scroll = i; else if (i >= this.scroll + v) this.scroll = i - v + 1;
-    this.scroll = Math.max(0, Math.min(this.maxScroll(), this.scroll));
+    let o = this.offset;
+    if (i < o) o = i; else if (i >= o + v) o = i - v + 1;
+    this.offset = Math.max(0, Math.min(this.maxScroll(), o));
     this.renderList();
   }
 
   rowAt(e) {
-    const p = localPoint(this.list, e, 243, this.rows * 29);
-    const i = this.scroll + Math.floor((p.y - 3) / ROW_H);
+    const p = localPoint(this.list, e, 243, this.listH);
+    const i = this.offset + Math.floor((p.y - 3) / ROW_H);
     return i >= 0 ? i : null;
+  }
+
+  onBrowseDown(e) {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const i = this.rowAt(e), br = this.browser;
+    if (i === null || i >= br.items.length) return;
+    br.sel = i; this.renderList();
   }
 
   onListDown(e) {
@@ -159,16 +192,33 @@ export class PlaylistWindow {
     this.drawStatus();
   }
 
+  renderTabs() {
+    const p = this.skin.pledit, br = this.mode === 'browse';
+    const key = [this.skin.name, br, br && this.browser ? this.browser.crumb + this.browser.stack.length : ''].join('|');
+    if (this.tabs._key === key) return;
+    this.tabs._key = key;
+    this.tabs.style.background = p.normalbg;
+    this.tabs.style.borderBottom = `1px solid ${p.selectedbg}`;
+    for (const [t, on] of [[this.tabPl, !br], [this.tabBr, br]]) {
+      t.style.color = on ? p.current : p.normal;
+      t.style.background = on ? p.selectedbg : 'transparent';
+    }
+    const depth = br && this.browser ? this.browser.stack.length : 0;
+    let c = depth > 1 ? this.browser.crumb : '';
+    if (c.length > 34) c = '…' + c.slice(-33);
+    this.crumb.textContent = c ? `‹ ${c}` : '';
+    this.crumb.style.color = p.normal;
+  }
+
   renderList() {
+    if (!this.handle) return;
+    this.renderTabs();
+    if (this.mode === 'browse') return this.renderBrowse();
     const app = this.app, pl = app.state.playlist, p = this.skin.pledit;
     const v = this.visibleRows();
     this.scroll = Math.max(0, Math.min(this.maxScroll(), this.scroll));
-    const key = [this.skin.name, app.version, this.scroll, v, app.state.current, app.state.selVersion].join('|');
-    // scroll handle
-    const travel = this.rows * 29 - 18;
-    const max = this.maxScroll();
-    this.handle.style.top = (max ? Math.round((this.scroll / max) * travel) : 0) + 'px';
-    sprite(this.handle, this.skin, 'pledit', this.handle.classList.contains('down') ? 61 : 52, 53);
+    const key = ['pl', this.skin.name, app.version, this.scroll, v, app.state.current, app.state.selVersion].join('|');
+    this.paintHandle();
     if (this.list._key === key) return;
     this.list._key = key;
     const frag = document.createDocumentFragment();
@@ -186,6 +236,44 @@ export class PlaylistWindow {
       const dur = document.createElement('span'); dur.className = 'pl-dur';
       dur.textContent = t.duration ? fmtTime(t.duration, false) : '';
       row.append(title, dur);
+      frag.appendChild(row);
+    }
+    this.list.replaceChildren(frag);
+  }
+
+  paintHandle() {
+    const travel = this.rows * 29 - 18, max = this.maxScroll();
+    this.handle.style.top = (max ? Math.round((this.offset / max) * travel) : 0) + 'px';
+    sprite(this.handle, this.skin, 'pledit', this.handle.classList.contains('down') ? 61 : 52, 53);
+  }
+
+  renderBrowse() {
+    const app = this.app, br = this.browser, p = this.skin.pledit;
+    if (!br) return;
+    const v = this.visibleRows(), items = br.items;
+    br.scroll = Math.max(0, Math.min(this.maxScroll(), br.scroll));
+    const cur = app.currentTrack(), curKey = cur && (cur.server ? `${cur.server}:${cur.songId}` : cur.path || cur.url);
+    const key = ['br', this.skin.name, br.version, br.scroll, br.sel, v, curKey].join('|');
+    this.paintHandle();
+    if (this.list._key === key) return;
+    this.list._key = key;
+    const frag = document.createDocumentFragment();
+    for (let k = 0; k < v; k++) {
+      const i = br.scroll + k;
+      if (i >= items.length) break;
+      const it = items[i];
+      const row = document.createElement('div');
+      row.className = 'pl-row br-' + it.kind + (it.strong ? ' br-strong' : '') + (it.missing ? ' br-missing' : '');
+      row.style.top = 3 + k * ROW_H + 'px';
+      if (i === br.sel && it.kind !== 'info') row.style.background = p.selectedbg;
+      const t = it.track;
+      const playing = t && curKey && (t.server ? `${t.server}:${t.songId}` : t.path || t.url) === curKey;
+      if (it.strong || playing) row.style.color = p.current;
+      const title = document.createElement('span'); title.className = 'pl-title';
+      title.textContent = it.kind === 'up' ? '‹ Back' : it.label;
+      const right = document.createElement('span'); right.className = 'pl-dur';
+      right.textContent = (it.right || '') + (it.kind === 'folder' ? ' ›' : '');
+      row.append(title, right);
       frag.appendChild(row);
     }
     this.list.replaceChildren(frag);

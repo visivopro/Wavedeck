@@ -30,6 +30,11 @@ A free, classic-style music player for Windows. It's a FLAC and MP3 player first
 - Wavedeck's own `.wdskin` format: same sprite-sheet layout, but PNG with transparency, plus `skin.json` metadata and an optional `library.css` that themes the Media Library.
 - Options → Skins → *Export skin template* writes the built-in skin as a ready-to-edit `.wdskin`. See [docs/SKINS.md](docs/SKINS.md).
 
+**Browse tab and Mixtapes**
+- The playlist window has a **Browse** tab (or press Tab): drill through your music by Artist → Album → Song without leaving the player. Works with your local library and Navidrome / Subsonic servers, including server playlists and recently added albums.
+- **Shuffle all songs** plays random songs from your whole library or server and keeps topping up the queue as you listen.
+- **Mixtapes** are your own playlists, saved in the player. Mix local files and server songs on the same tape. Right-click any song, album, artist or playlist selection → Add to mixtape, or LIST → Save as mixtape. Rename, reorder and delete them from Browse → Mixtapes.
+
 **Media Library** (Alt+L)
 - Organizes your music by **Artist → Album → Song**, plus Albums, Songs and Genres views, and search across everything.
 - Watches any folders you add: local drives, USB drives, **network shares** (`\\NAS\Music` or a mapped drive). Incremental rescans only re-read changed files.

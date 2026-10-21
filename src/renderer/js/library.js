@@ -153,7 +153,7 @@ async function renderArtists() {
     b.dataset.key = a.key;
     b.innerHTML = `<span class="avatar" style="background:hsl(${hue(a.name)} 30% 20%)">${esc(initials(a.name))}</span><span class="name">${esc(a.name)}</span><span class="n">${a.albumCount || ''}</span>`;
     b.onclick = () => { S.artist = a; list.querySelectorAll('button.on').forEach((x) => x.classList.remove('on')); b.classList.add('on'); renderArtistPane(a); };
-    b.oncontextmenu = (e) => ctx(e, [['Play artist', async () => play(await S.source.artistTracks(a.key), 0)], ['Add to playlist', async () => enqueue(await S.source.artistTracks(a.key))]]);
+    b.oncontextmenu = (e) => ctx(e, [['Play artist', async () => play(await S.source.artistTracks(a.key), 0)], ['Add to playlist', async () => enqueue(await S.source.artistTracks(a.key))], ['Add to mixtape…', () => toMixtape(() => S.source.artistTracks(a.key))]]);
     b.ondblclick = async () => play(await S.source.artistTracks(a.key), 0);
     frag.appendChild(b);
   }
@@ -226,7 +226,7 @@ function albumGrid(container, albums, { showArtist }) {
       <div class="t" title="${esc(al.title)}">${esc(al.title)}</div><div class="a">${showArtist ? esc(al.artist) : ''}${showArtist && al.year ? ' · ' : ''}${al.year || ''}</div>`;
     card.onclick = (e) => { if (e.target.closest('.play')) return; S.album = al; render(); };
     card.querySelector('.play').onclick = async (e) => { e.stopPropagation(); play(await S.source.albumTracks(al.key), 0); };
-    card.oncontextmenu = (e) => ctx(e, [['Play', async () => play(await S.source.albumTracks(al.key), 0)], ['Add to playlist', async () => enqueue(await S.source.albumTracks(al.key))], ['Play next', async () => playNext(await S.source.albumTracks(al.key))], null, ['Go to artist', () => goArtist(al)]]);
+    card.oncontextmenu = (e) => ctx(e, [['Play', async () => play(await S.source.albumTracks(al.key), 0)], ['Add to playlist', async () => enqueue(await S.source.albumTracks(al.key))], ['Play next', async () => playNext(await S.source.albumTracks(al.key))], ['Add to mixtape…', () => toMixtape(() => S.source.albumTracks(al.key))], null, ['Go to artist', () => goArtist(al)]]);
     card.draggable = true;
     card.ondragstart = async (e) => { e.dataTransfer.setData('application/x-wavedeck-tracks', JSON.stringify(await S.source.albumTracks(al.key))); };
     card._album = al;
@@ -275,6 +275,8 @@ async function renderAlbum(al) {
   $('#al-shuf').onclick = () => { const t = [...tracks]; shuffle(t); play(t, 0); };
   $('#al-add').onclick = () => enqueue(tracks);
   $('#al-next').onclick = () => playNext(tracks);
+  const mxBtn = document.createElement('button'); mxBtn.className = 'btn'; mxBtn.textContent = 'Add to mixtape'; mxBtn.onclick = () => toMixtape(async () => tracks);
+  $('#al-next').after(mxBtn);
   S.source.cover(al).then((url) => { if (url) { const c = $('#al-cover'); if (c) c.innerHTML = `<img src="${esc(url)}">`; } }).catch(() => {});
   trackTable($('#al-table'), tracks, { compact: true });
 }
@@ -313,7 +315,7 @@ function trackRow(t, i, compact, cur) {
   row.oncontextmenu = (e) => {
     if (!S.selected.has(i)) { S.selected = new Set([i]); paintSelection(); }
     const sel = selectedTracks();
-    ctx(e, [['Play', () => play(sel, 0)], ['Add to playlist', () => enqueue(sel)], ['Play next', () => playNext(sel)], null,
+    ctx(e, [['Play', () => play(sel, 0)], ['Add to playlist', () => enqueue(sel)], ['Play next', () => playNext(sel)], ['Add to mixtape…', () => toMixtape(async () => sel)], null,
       ...(sel[0]?.path ? [['Show in folder', () => R.showInFolder(sel[0].path)]] : [])]);
   };
   row.draggable = true;
@@ -397,6 +399,21 @@ async function play(tracks, start) {
   p.playIndex(start || 0);
 }
 async function enqueue(tracks) { const p = P(); if (!p || !tracks.length) return; await p.addTracks(tracks); toast(`Added ${tracks.length} song${tracks.length === 1 ? '' : 's'} to the playlist`); }
+// Add to mixtape: native menu listing the player's mixtapes, plus "New mixtape…".
+async function toMixtape(getTracks) {
+  const p = P(); if (!p) return;
+  const tapes = p.mixtapes();
+  const id = await R.popupMenu([...tapes.map((m) => ({ id: m.id, label: `${m.name}  (${m.count})` })), ...(tapes.length ? [{ type: 'separator' }] : []), { id: '__new', label: 'New mixtape…' }]);
+  if (!id) return;
+  const tracks = await getTracks();
+  if (id !== '__new') { await p.addToMixtape(id, tracks); toast(`Added to ${tapes.find((m) => m.id === id)?.name}`); return; }
+  const d = modal(`<h2>New mixtape</h2><p class="hint">${tracks.length} song${tracks.length === 1 ? '' : 's'} will be added.</p><div class="row"><input id="mx-name" spellcheck="false"></div><div class="foot"><button class="btn" id="mx-cancel">Cancel</button><button class="btn primary" id="mx-ok">Create mixtape</button></div>`);
+  const inp = d.querySelector('#mx-name'); inp.value = p.nextMixtapeName(); inp.focus(); inp.select();
+  const ok = async () => { const m = await p.createMixtape(inp.value || p.nextMixtapeName(), tracks); closeModal(); toast(`Created ${m.name}`); };
+  d.querySelector('#mx-ok').onclick = ok; d.querySelector('#mx-cancel').onclick = closeModal;
+  inp.onkeydown = (e) => { if (e.key === 'Enter') ok(); };
+}
+
 async function playNext(tracks) {
   const p = P(); if (!p || !tracks.length) return;
   const st = p.getState();

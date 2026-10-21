@@ -32,3 +32,14 @@ canvas.sk { image-rendering: pixelated; }
 .h-ne { top: 0; right: 0; cursor: nesw-resize; } .h-sw { bottom: 0; left: 0; cursor: nesw-resize; }
 .h-nw { top: 0; left: 0; cursor: nwse-resize; } .h-se { bottom: 0; right: 0; cursor: nwse-resize; }
 body.shaded .h-n, body.shaded .h-s, body.shaded .h-ne, body.shaded .h-nw, body.shaded .h-se, body.shaded .h-sw { display: none; }
+
+/* playlist window tabs + browse rows */
+.pl-tabs { position: absolute; display: flex; align-items: stretch; gap: 1px; font-size: 9px; line-height: 12px; box-sizing: border-box; overflow: hidden; white-space: nowrap; cursor: default; }
+.pl-tab { padding: 0 6px; }
+.pl-tab:hover { text-decoration: underline; }
+.pl-crumb { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 0 4px 0 6px; opacity: .8; text-align: right; }
+.pl-crumb:not(:empty):hover { opacity: 1; text-decoration: underline; }
+.br-info { opacity: .55; font-style: italic; }
+.br-strong { font-weight: 700; }
+.br-up .pl-title { opacity: .8; }
+.br-missing { opacity: .45; }

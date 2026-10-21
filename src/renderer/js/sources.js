@@ -52,6 +52,15 @@ export class LocalSource {
   albumsForGenre(gk) { const g = this.genreMap.get(gk); return g ? [...g.albums].map((k) => this.albumInfo(this.albumMap.get(k))) : []; }
   async albumTracks(albumKey) { return (this.albumMap.get(albumKey)?.tracks || []).map(toPlayer); }
   async artistTracks(artistKey) { return this.albums(artistKey).sort((a, b) => (a.year || 0) - (b.year || 0)).flatMap((a) => this.albumMap.get(a.key).tracks.map(toPlayer)); }
+  async randomSongs(n = 100, exclude = new Set()) {
+    const pool = this.tracks.filter((t) => !exclude.has(t.path));
+    const src = pool.length ? pool : this.tracks;
+    const out = [];
+    for (let i = 0; i < Math.min(n, src.length); i++) { const j = i + Math.floor(Math.random() * (src.length - i)); [src[i], src[j]] = [src[j], src[i]]; out.push(toPlayer(src[i])); }
+    return out;
+  }
+  async recentAlbums() { return this.albums().sort((a, b) => (b.added || 0) - (a.added || 0)).slice(0, 100); }
+  async playlists() { return null; }
   songs() { return this.tracks.map(toPlayer); }
   genres() { return [...this.genreMap.values()].map((g) => ({ key: g.key, name: g.name, albumCount: g.albums.size, trackCount: g.tracks })).sort((a, b) => byText(a.name, b.name)); }
   async search(q) {
@@ -130,6 +139,18 @@ export class SubsonicSource {
   async artistTracks(artistKey) { const albums = await this.albums(artistKey); const all = []; for (const a of albums) all.push(...(await this.albumTracks(a.key))); return all; }
   songs() { return null; }
   genres() { return null; }
+  async randomSongs(n = 100, exclude = new Set()) {
+    const r = await this.call('getRandomSongs', { size: Math.min(500, n) });
+    const list = (r.randomSongs?.song || []).filter((s) => !exclude.has(`${this.cfg.id}:${s.id}`));
+    return Promise.all(list.map((s) => this.toPlayer(s)));
+  }
+  async recentAlbums() { const r = await this.call('getAlbumList2', { type: 'newest', size: 100 }); return (r.albumList2?.album || []).map((a) => this.albumInfo(a)); }
+  async playlists() {
+    const r = await this.call('getPlaylists');
+    return (r.playlists?.playlist || []).map((p) => ({ key: p.id, name: p.name, songCount: p.songCount, duration: p.duration }));
+  }
+  async playlistTracks(id) { const r = await this.call('getPlaylist', { id }); return Promise.all((r.playlist?.entry || []).map((s) => this.toPlayer(s))); }
+  async streamUrl(songId) { return `${this.base()}/rest/stream.view?id=${encodeURIComponent(songId)}&${await this.auth()}`; }
   async search(q) {
     const r = await this.call('search3', { query: q, artistCount: 30, albumCount: 60, songCount: 300 });
     const s = r.searchResult3 || {};
@@ -144,7 +165,7 @@ export class SubsonicSource {
       url: `${this.base()}/rest/stream.view?id=${encodeURIComponent(s.id)}&${await this.auth()}`,
       title: s.title, artist: s.artist, album: s.album, track: s.track, disc: s.discNumber, year: s.year, genre: s.genre,
       duration: s.duration, bitrate: s.bitRate, sampleRate: s.samplingRate, channels: s.channelCount || 2,
-      codec: s.suffix, lossless: /flac|alac|wav|aiff/i.test(s.suffix || ''), source: this.name,
+      codec: s.suffix, lossless: /flac|alac|wav|aiff/i.test(s.suffix || ''), source: this.name, server: this.cfg.id, songId: s.id,
     };
   }
   async cover(album) {

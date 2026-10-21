@@ -39,6 +39,11 @@ contextBridge.exposeInMainWorld('wavedeck', {
     onProgress: on('lib:progress'),
     onChanged: on('lib:changed'),
   },
+  mixtapes: {
+    get: invoke('mixtapes:get'),
+    save: invoke('mixtapes:save'),
+    onChanged: on('mixtapes:changed'),
+  },
   plugins: {
     list: invoke('plugins:list'),
     openDir: invoke('plugins:dir'),

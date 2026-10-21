@@ -481,7 +481,18 @@ function registerIpc() {
     return l.folders;
   });
   ipcMain.handle('lib:scan', scanLibrary);
-  ipcMain.handle('lib:setServers', async (e, servers) => { loadLibrary().servers = servers; await saveLibrary(); return true; });
+  ipcMain.handle('lib:setServers', async (e, servers) => { loadLibrary().servers = servers; await saveLibrary(); broadcast('lib:changed'); return true; });
+
+  // Mixtapes: the user's own playlists, stored on this PC.
+  const mixFile = () => path.join(userDir(), 'mixtapes.json');
+  ipcMain.handle('mixtapes:get', async () => { try { return JSON.parse(await fsp.readFile(mixFile(), 'utf8')); } catch { return []; } });
+  ipcMain.handle('mixtapes:save', async (e, list) => {
+    const tmp = mixFile() + '.tmp';
+    await fsp.writeFile(tmp, JSON.stringify(list));
+    await fsp.rename(tmp, mixFile());
+    broadcast('mixtapes:changed');
+    return true;
+  });
 
   ipcMain.handle('plugins:list', listPlugins);
   ipcMain.handle('plugins:dir', async () => { await fsp.mkdir(pluginsDir(), { recursive: true }); shell.openPath(pluginsDir()); });

@@ -2,6 +2,8 @@
 import { AudioEngine, EQ_BANDS } from './audio.js';
 import { defaultSkin, loadSkinArchive, exportTemplate, recipeSkin, packRecipeTheme, packRecipeSheets } from './skin.js';
 import { setAllCanvasRes } from './dom.js';
+import { Browser, SourceManager } from './browse.js';
+import { Mixtapes } from './mixtapes.js';
 import { MainWindow } from './ui-main.js';
 import { EqWindow } from './ui-eq.js';
 import { PlaylistWindow } from './ui-pl.js';
@@ -60,7 +62,10 @@ class App {
       plRows: s.plRows || 6,
       eq: { on: s.eq?.on ?? true, auto: !!s.eq?.auto, preamp: s.eq?.preamp ?? 0, bands: s.eq?.bands || EQ_BANDS.map(() => 0) },
       scrollTitle: s.scrollTitle ?? true,
+      plMode: s.plMode === 'browse' ? 'browse' : 'playlist',
     };
+    this.sources = new SourceManager();
+    this.mixtapes = new Mixtapes();
     const e = this.engine;
     e.setVolume(this.state.volume); e.setBalance(this.state.balance);
     e.eqOn = this.state.eq.on; e.preamp = this.state.eq.preamp; e.bands = [...this.state.eq.bands];
@@ -69,6 +74,7 @@ class App {
     this.main = new MainWindow(this, document.getElementById('main'));
     this.eq = new EqWindow(this, document.getElementById('eq'));
     this.pl = new PlaylistWindow(this, document.getElementById('pl'));
+    this.browser = new Browser(this);
     if (this.state.scaleK === null) this.state.scaleK = this.baseK * (this.state.legacyDouble ? 2 : 1);
     this.workArea = await R.win.workArea();
     this.stack.style.zoom = this.zoom;
@@ -92,6 +98,10 @@ class App {
     this.layout();
     this.loop();
     R.onOpenFiles((files) => this.openPaths(files, true));
+    await this.mixtapes.load();
+    R.mixtapes.onChanged(async () => { await this.mixtapes.load(); this.browserRefreshIf((l) => l.title === 'Mixtapes' || l.mixtape || this.browser.stack.length === 1); });
+    R.lib.onChanged(async () => { await this.sources.refresh(); this.browserRefreshIf((l) => this.browser.stack.indexOf(l) <= 1); });
+    if (this.state.plMode === 'browse') this.browser.open();
     R.onMediaKey((k) => ({ playpause: () => (this.state.status === 'playing' ? this.pause() : this.play()), next: () => this.next(), prev: () => this.prev(), stop: () => this.stop() }[k]?.()));
     this.loadPlugins();
   }
@@ -103,7 +113,7 @@ class App {
       R.setSettings({
         volume: st.volume, balance: st.balance, shuffle: st.shuffle, repeat: st.repeat, timeMode: st.timeMode,
         visMode: st.visMode, eqVisible: st.eqVisible, plVisible: st.plVisible, shade: st.shade, scaleK: st.scaleK, doubleSize: false,
-        plRows: st.plRows, eq: st.eq, scrollTitle: st.scrollTitle,
+        plRows: st.plRows, eq: st.eq, scrollTitle: st.scrollTitle, plMode: st.plMode,
         playlist: st.playlist.slice(0, 20000).map(({ id, ...t }) => t), current: st.current,
       });
     }, 500);
@@ -123,10 +133,11 @@ class App {
     return { ...x, id: nextId++ };
   }
 
-  async addTracks(items, { play = false, replace = false, at = null } = {}) {
+  async addTracks(items, { play = false, replace = false, at = null, keepEndless = false } = {}) {
     const tracks = items.map((x) => this.makeTrack(x));
     if (!tracks.length) return;
     const st = this.state;
+    if (replace && !keepEndless) this.endless = null;
     if (replace) { this.stop(); st.playlist = []; st.current = -1; st.selected = new Set(); this.history = []; }
     const insertAt = at ?? st.playlist.length;
     st.playlist.splice(insertAt, 0, ...tracks);
@@ -185,7 +196,7 @@ class App {
   }
   removeSelected() { this.removeIndices([...this.state.selected]); }
   cropSelected() { const s = this.state.selected; this.removeIndices(this.state.playlist.map((_, i) => i).filter((i) => !s.has(i))); }
-  clearPlaylist() { this.stop(); this.state.playlist = []; this.state.current = -1; this.state.selected = new Set(); this.changed(); }
+  clearPlaylist() { this.endless = null; this.stop(); this.state.playlist = []; this.state.current = -1; this.state.selected = new Set(); this.changed(); }
   moveSelection(delta) {
     const st = this.state;
     const sel = [...st.selected].sort((a, b) => a - b);
@@ -259,8 +270,14 @@ class App {
     if (!fromHistory && st.current >= 0 && st.current !== i) this.history.push(st.current);
     st.current = i;
     const t = st.playlist[i];
+    if (t.missing) {
+      this.main.flash('SERVER NOT CONNECTED'); setTimeout(() => this.main.flash(null), 1200);
+      if (this.pickNext() >= 0 && i !== this.pickNext()) setTimeout(() => this.next(true), 900);
+      return;
+    }
     this.engine.stopped = false;
     this.engine.load(t);
+    if (this.endless) this.topUpEndless();
     if (st.eq.auto) this.applyAutoEq(t);
     this.engine.play();
     this.pl.ensureVisible(i);
@@ -288,7 +305,7 @@ class App {
   pickNext() {
     const st = this.state, n = st.playlist.length;
     if (!n) return -1;
-    if (st.shuffle) {
+    if (st.shuffle && !this.endless) {
       if (n === 1) return 0;
       let j; do { j = Math.floor(Math.random() * n); } while (j === st.current);
       return j;
@@ -644,6 +661,8 @@ class App {
       { id: 'openurl', label: 'Play URL…', accelerator: 'Ctrl+L' },
       { type: 'separator' },
       { id: 'library', label: 'Media Library', accelerator: 'Alt+L' },
+      { id: 'browse', label: 'Browse in playlist window', accelerator: 'Tab' },
+      { id: 'savemix', label: 'Save playlist as mixtape…' },
       { id: 'milkdrop', label: 'Visualization window', accelerator: 'Ctrl+Shift+K' },
       { id: 'eqwin', label: 'Equalizer', checked: st.eqVisible, accelerator: 'Alt+G' },
       { id: 'plwin', label: 'Playlist editor', checked: st.plVisible, accelerator: 'Alt+E' },
@@ -680,7 +699,7 @@ class App {
     ];
     this.menu(tpl, {
       about: () => this.showAbout(), openfile: () => this.openFiles(true), openfolder: () => this.openFolder(true), openurl: () => this.openUrl(),
-      library: () => this.openLibrary(), milkdrop: () => this.openMilkdrop(), eqwin: () => this.toggleEqWindow(), plwin: () => this.togglePlWindow(),
+      library: () => this.openLibrary(), browse: () => { if (!this.state.plVisible) this.togglePlWindow(); this.setPlMode('browse'); }, savemix: () => this.saveAsMixtape(), milkdrop: () => this.openMilkdrop(), eqwin: () => this.toggleEqWindow(), plwin: () => this.togglePlWindow(),
       ontop: () => this.toggleOnTop(), double: () => this.toggleDouble(), shade: () => this.toggleShade(), timemode: () => this.toggleTimeMode(),
       scroll: () => { this.state.scrollTitle = !this.state.scrollTitle; this.persist(); },
       repeat: () => this.toggleRepeat(), shuffle: () => this.toggleShuffle(),
@@ -757,11 +776,13 @@ class App {
     });
   }
   showPlListMenu() {
-    this.menu([{ id: 'new', label: 'New list' }, { id: 'load', label: 'Load list…' }, { id: 'save', label: 'Save list…' }],
-      { new: () => this.clearPlaylist(), load: () => this.loadPlaylistFile(), save: () => this.savePlaylistFile() });
+    this.menu([{ id: 'new', label: 'New list' }, { id: 'load', label: 'Load list…' }, { id: 'save', label: 'Save list…' }, { type: 'separator' }, { id: 'mix', label: 'Save as mixtape…' }, { id: 'browse', label: 'Browse mixtapes' }],
+      { new: () => this.clearPlaylist(), load: () => this.loadPlaylistFile(), save: () => this.savePlaylistFile(), mix: () => this.saveAsMixtape(),
+        browse: async () => { this.setPlMode('browse'); await this.browser.open(); this.browser.home(); await this.browser.push(this.browser.mixtapesLevel()); } });
   }
   showPlaylistMenu() {
     const n = this.state.selected.size;
+    const mxSel = this.mixtapeSubmenu(async () => [...this.state.selected].sort((a, b) => a - b).map((i) => this.state.playlist[i]));
     this.menu([
       { id: 'play', label: 'Play item', enabled: n > 0 },
       { id: 'info', label: 'File info…', enabled: n > 0 },
@@ -770,9 +791,13 @@ class App {
       { id: 'rem', label: 'Remove selected', enabled: n > 0 },
       { id: 'crop', label: 'Crop', enabled: n > 0 },
       { type: 'separator' },
+      { label: 'Add selected to mixtape', enabled: n > 0, submenu: mxSel.submenu },
+      { id: 'mixall', label: 'Save playlist as mixtape…', enabled: this.state.playlist.length > 0 },
+      { type: 'separator' },
       { id: 'add', label: 'Add files…' },
       { id: 'save', label: 'Save list…' },
     ], {
+      ...mxSel.handlers, mixall: () => this.saveAsMixtape(),
       play: () => this.playIndex([...this.state.selected][0]), info: () => this.openTool('info'),
       show: () => { const t = this.state.playlist[[...this.state.selected][0]]; if (t?.path) R.showInFolder(t.path); },
       rem: () => this.removeSelected(), crop: () => this.cropSelected(), add: () => this.openFiles(false), save: () => this.savePlaylistFile(),
@@ -782,6 +807,162 @@ class App {
   async savePlaylistFile() {
     const items = this.state.playlist.map((t) => ({ path: t.path, url: t.url, duration: t.duration, displayTitle: this.trackTitle(t) }));
     R.savePlaylist(items);
+  }
+
+  // ---------------- browse tab, sources, endless shuffle ----------------
+  setPlMode(m) {
+    this.state.plMode = m === 'browse' ? 'browse' : 'playlist';
+    if (this.state.plMode === 'browse') this.browser.open();
+    this.pl.list._key = null; this.pl.tabs._key = null;
+    this.pl.renderList(); this.persist();
+  }
+  browserRefreshIf(test) {
+    const b = this.browser;
+    if (!b.stack.length) return;
+    if (test(b.level)) b.refreshLevel();
+    else for (const l of b.stack) if (test(l)) l.items = null; // reload when revisited
+  }
+  flashMsg(text, ms = 1600) { this.main.flash(String(text).toUpperCase().slice(0, 31)); clearTimeout(this.flashT); this.flashT = setTimeout(() => this.main.flash(null), ms); }
+  async playList(tracks, start = 0, { shuffle = false } = {}) {
+    let list = tracks.filter((t) => !t.missing);
+    if (!list.length) { this.flashMsg('NOTHING TO PLAY'); return; }
+    if (shuffle) { list = [...list]; for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; } start = 0; }
+    else start = Math.max(0, list.indexOf(tracks[start]));
+    await this.addTracks(list, { replace: true });
+    this.playIndex(start);
+  }
+  // Mixtape refs → playable tracks (server songs get a fresh stream address).
+  async resolveRefs(refs) {
+    await this.sources.load();
+    return Promise.all(refs.map(async (r) => {
+      if (r.server && r.songId) {
+        const s = this.sources.server(r.server);
+        if (!s) return { ...r, missing: true };
+        return { ...r, url: await s.streamUrl(r.songId) };
+      }
+      return { ...r };
+    }));
+  }
+  trackKey(t) { return t.server ? `${t.server}:${t.songId}` : t.path || t.url; }
+  // Shuffle all: random songs from a whole source, topped up as you listen.
+  async startEndless(src) {
+    this.flashMsg(`SHUFFLE ALL: ${src.name}`);
+    const endless = { src, seen: new Set() };
+    this.endless = endless;
+    const batch = await this.fetchEndless(endless, 50);
+    if (this.endless !== endless) return;
+    if (!batch.length) { this.endless = null; this.flashMsg('NO SONGS FOUND'); return; }
+    await this.addTracks(batch, { replace: true, keepEndless: true });
+    this.playIndex(0);
+  }
+  async fetchEndless(endless, n) {
+    let songs = [];
+    try { songs = await endless.src.randomSongs(n, endless.seen); } catch (e) { console.error(e); }
+    songs.forEach((t) => endless.seen.add(this.trackKey(t)));
+    return songs;
+  }
+  async topUpEndless() {
+    const e = this.endless, st = this.state;
+    if (!e || e.busy || st.current < st.playlist.length - 10) return;
+    e.busy = true;
+    const more = await this.fetchEndless(e, 40);
+    e.busy = false;
+    if (this.endless !== e || !more.length) return;
+    await this.addTracks(more, { keepEndless: true });
+    // keep the queue from growing forever: drop songs played long ago
+    const drop = st.current - 150;
+    if (drop > 0) this.removeIndices(Array.from({ length: drop }, (_, k) => k));
+  }
+
+  // ---------------- mixtapes ----------------
+  async newMixtape(tracks = []) {
+    const name = await this.prompt('New mixtape', 'Name your mixtape:', this.mixtapes.nextName());
+    if (name === null) return null;
+    const m = await this.mixtapes.create(name || this.mixtapes.nextName(), tracks);
+    this.flashMsg(tracks.length ? `SAVED ${tracks.length} TO ${m.name}` : `CREATED ${m.name}`);
+    return m;
+  }
+  async addToMixtape(id, tracks) {
+    const n = await this.mixtapes.add(id, tracks);
+    const m = this.mixtapes.get(id);
+    this.flashMsg(n ? `+${n} TO ${m.name}` : `ALREADY ON ${m.name}`);
+  }
+  // menu entries for "Add to mixtape ▸"; get(): resolves to the tracks
+  mixtapeSubmenu(get, prefix = 'mx') {
+    const items = this.mixtapes.list.map((m) => ({ id: `${prefix}:${m.id}`, label: `${m.name}  (${m.tracks.length})` }));
+    const handlers = {};
+    for (const m of this.mixtapes.list) handlers[`${prefix}:${m.id}`] = async () => this.addToMixtape(m.id, await get());
+    handlers[`${prefix}:new`] = async () => this.newMixtape(await get());
+    return { submenu: [...items, ...(items.length ? [{ type: 'separator' }] : []), { id: `${prefix}:new`, label: 'New mixtape…' }], handlers };
+  }
+  async saveAsMixtape() {
+    if (!this.state.playlist.length) { this.flashMsg('PLAYLIST IS EMPTY'); return; }
+    await this.newMixtape(this.state.playlist);
+  }
+  async renameMixtape(id) {
+    const m = this.mixtapes.get(id); if (!m) return;
+    const name = await this.prompt('Rename mixtape', 'New name:', m.name);
+    if (name) await this.mixtapes.rename(id, name);
+  }
+  async deleteMixtape(id) {
+    const m = this.mixtapes.get(id); if (!m) return;
+    const r = await R.message({ type: 'question', buttons: ['Delete', 'Cancel'], defaultId: 1, cancelId: 1, message: `Delete the mixtape “${m.name}”?`, detail: 'The songs themselves are not affected.' });
+    if (r.response !== 0) return;
+    await this.mixtapes.remove(id);
+    if (this.browser.level && this.browser.level.mixtape === id) this.browser.back();
+  }
+
+  async showBrowseMenu(it, i) {
+    const b = this.browser;
+    if (it.kind === 'info' || it.kind === 'up') return;
+    if (it.kind === 'action') { this.menu([{ id: 'run', label: it.label.replace(/^[^\w]+/, '') }], { run: () => it.run() }); return; }
+    const getTracks = async () => (it.kind === 'song' ? [it.track] : it.tracks ? it.tracks() : []);
+    const mx = this.mixtapeSubmenu(getTracks);
+    const tpl = [], h = { ...mx.handlers };
+    if (it.kind === 'song') {
+      tpl.push({ id: 'play', label: 'Play from here' }, { id: 'one', label: 'Play just this song' });
+      h.play = () => b.activate(i); h.one = () => this.playList([it.track], 0);
+    } else if (it.kind === 'folder' && it.tracks) {
+      tpl.push({ id: 'play', label: 'Play' }, { id: 'shuf', label: 'Shuffle' });
+      h.play = async () => this.playList(await getTracks(), 0); h.shuf = async () => this.playList(await getTracks(), 0, { shuffle: true });
+    } else if (it.kind === 'folder') {
+      tpl.push({ id: 'open', label: 'Open' }); h.open = () => b.activate(i);
+    }
+    if (it.kind === 'song' || it.tracks) {
+      tpl.push({ id: 'next', label: 'Play next' }, { id: 'add', label: 'Add to playlist' }, { label: 'Add to mixtape', submenu: mx.submenu });
+      h.next = async () => { const t = await getTracks(); await this.addTracks(t, { at: Math.max(0, this.state.current + 1) }); this.flashMsg(`PLAYING NEXT: ${t.length}`); };
+      h.add = async () => { const t = await getTracks(); await this.addTracks(t); this.flashMsg(`ADDED ${t.length} TO PLAYLIST`); };
+    }
+    if (it.kind === 'folder' && it.mixtape) {
+      tpl.push({ type: 'separator' }, { id: 'ren', label: 'Rename mixtape…' }, { id: 'del', label: 'Delete mixtape…' });
+      h.ren = () => this.renameMixtape(it.mixtape); h.del = () => this.deleteMixtape(it.mixtape);
+    }
+    if (it.kind === 'song' && it.mixtape) {
+      const m = this.mixtapes.get(it.mixtape);
+      tpl.push({ type: 'separator' },
+        { id: 'up', label: 'Move up', enabled: it.index > 0 }, { id: 'down', label: 'Move down', enabled: m && it.index < m.tracks.length - 1 },
+        { id: 'rm', label: 'Remove from mixtape' });
+      h.up = async () => { await this.mixtapes.move(it.mixtape, it.index, -1); b.sel = Math.max(0, b.sel - 1); };
+      h.down = async () => { await this.mixtapes.move(it.mixtape, it.index, 1); b.sel = b.sel + 1; };
+      h.rm = () => this.mixtapes.removeAt(it.mixtape, it.index);
+    }
+    if (it.track && it.track.path) { tpl.push({ type: 'separator' }, { id: 'show', label: 'Show in folder' }); h.show = () => R.showInFolder(it.track.path); }
+    this.menu(tpl, h);
+  }
+
+  browseKeys(k, e) {
+    const b = this.browser, n = b.items.length, page = this.pl.visibleRows();
+    const go = (i) => { b.sel = Math.max(0, Math.min(n - 1, i)); this.pl.ensureVisible(b.sel, true); this.pl.renderList(); };
+    const map = {
+      arrowdown: () => go(b.sel + 1), arrowup: () => go(b.sel - 1), pagedown: () => go(b.sel + page), pageup: () => go(b.sel - page),
+      home: () => go(0), end: () => go(n - 1), enter: () => b.activate(), backspace: () => b.back(),
+      arrowright: () => { const it = b.items[b.sel]; if (it && (it.kind === 'folder' || it.kind === 'up')) b.activate(); else return false; },
+      arrowleft: () => (b.stack.length > 1 ? b.back() : false),
+    };
+    if (!map[k]) return false;
+    if (map[k]() === false) return false;
+    e.preventDefault();
+    return true;
   }
 
   // ---------------- keyboard ----------------
@@ -807,6 +988,8 @@ class App {
       if (c && k === 'o') return act(() => this.openFiles(true));
       if (c && k === 's') return act(() => this.savePlaylistFile());
       if (c || a) return;
+      if (this.state.plVisible && this.state.plMode === 'browse' && this.browseKeys(k, e)) return;
+      if (k === 'tab' && this.state.plVisible) return act(() => this.setPlMode(this.state.plMode === 'browse' ? 'playlist' : 'browse'));
       const map = {
         z: () => this.prev(), x: () => this.play(), c: () => this.pause(), v: () => (s ? this.stop() : this.stop()), b: () => this.next(),
         l: () => (s ? this.openFolder(true) : this.openFiles(true)), j: () => this.openTool('jump'), r: () => this.toggleRepeat(), s: () => this.toggleShuffle(),
@@ -868,6 +1051,10 @@ class App {
       skin: () => ({ name: app.skin.name, libraryCss: app.skin.libraryCss, pledit: app.skin.pledit, viscolors: app.skin.viscolors }),
       on: (ev, fn) => app.on(ev, fn),
       control: (cmd) => app[cmd] && app[cmd](),
+      mixtapes: () => app.mixtapes.list.map((m) => ({ id: m.id, name: m.name, count: m.tracks.length })),
+      addToMixtape: (id, tracks) => app.addToMixtape(id, tracks),
+      createMixtape: (name, tracks) => app.mixtapes.create(name, tracks),
+      nextMixtapeName: () => app.mixtapes.nextName(),
     };
   }
 
