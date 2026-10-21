@@ -34,7 +34,8 @@
       "skins/**/*",
       "build/icon.png",
       "package.json",
-      "LICENSE"
+      "LICENSE",
+      "THIRD-PARTY-NOTICES.md"
     ],
     "asarUnpack": [],
     "win": {

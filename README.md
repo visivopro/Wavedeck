@@ -60,6 +60,12 @@ npm run dist         # build the Windows installer and portable exe into dist/
 
 Building the Windows installer on Linux or macOS also needs Wine.
 
+The modern skin engine (`src/renderer/modern/webamp-modern.js`) is prebuilt. To rebuild it from source, run `vendor/webamp-modern/build.sh`; it applies Wavedeck's patch to the upstream Webamp Modern engine.
+
+## License
+
+Wavedeck is free and open source under the [MIT license](LICENSE). Everything it bundles is open source too; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
 ## Notes
 
 Wavedeck is an independent project. It is not affiliated with Winamp or its owners; it only reads the publicly documented classic skin format. The built-in skin and all artwork are original.

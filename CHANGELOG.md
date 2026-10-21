@@ -10,6 +10,17 @@
 - The skin's buttons, sliders, EQ, visualizer and playlist window all drive Wavedeck, so your library, Browse tab, mixtapes and Navidrome streaming keep working.
 - Skins open where your player was and remember their position, and the last skin you used comes back on startup.
 - Right-click opens Wavedeck's menu; choose *Skins → Back to classic skin* to return.
+- Windows you close on a skin (an About or welcome window, say) stay closed next time, and windows you open stay open.
+- Song length, bitrate and playlist totals show real values on the skin.
+- Side windows open clear of a skin's slide-out drawers.
+
+**Shaped classic skins**
+
+- Classic `.wsz` skins with a `region.txt` are now cut to their outline, so rounded and odd-shaped classic skins no longer show colored corners.
+
+**Open source**
+
+- Every change to the bundled skin engine is in `vendor/webamp-modern` (a patch plus a rebuild script). `THIRD-PARTY-NOTICES.md` lists every bundled component and its license.
 - Powered by the open-source Webamp Modern engine (MIT license). Very script-heavy skins may not work perfectly yet.
 
 ## 1.3.0 (October 21, 2026)

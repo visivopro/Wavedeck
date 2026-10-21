@@ -1,0 +1,107 @@
+diff --git a/packages/webamp-modern/src/skin/AudioPlayer.ts b/packages/webamp-modern/src/skin/AudioPlayer.ts
+index e5c1a45..fbe13a5 100644
+--- a/packages/webamp-modern/src/skin/AudioPlayer.ts
++++ b/packages/webamp-modern/src/skin/AudioPlayer.ts
+@@ -430,6 +430,9 @@ export class AudioPlayer {
+   }
+ }
+ 
+-const AUDIO_PLAYER = new AudioPlayer();
++// Wavedeck: the host page can supply its own player so skins drive the app's audio engine.
++const AUDIO_PLAYER: AudioPlayer = (window as any).__WAVEDECK_AUDIO__
++  ? (window as any).__WAVEDECK_AUDIO__()
++  : new AudioPlayer();
+ 
+ export default AUDIO_PLAYER;
+diff --git a/packages/webamp-modern/src/skin/makiClasses/Text.ts b/packages/webamp-modern/src/skin/makiClasses/Text.ts
+index 24901b9..006fab4 100644
+--- a/packages/webamp-modern/src/skin/makiClasses/Text.ts
++++ b/packages/webamp-modern/src/skin/makiClasses/Text.ts
+@@ -262,28 +262,12 @@ offsety - (int) Extra pixels to be added to or subtracted from the calculated x
+       case "":
+         this._displayValue = "";
+         break;
+-      case "pe_info":
+-        this._displayValue = "pe_info";
+-        break;
+-      case "vid_info":
+-        this._displayValue = "vid_info";
+-        break;
+       case "time":
+         this._disposeDisplaySubscription =
+           this._uiRoot.audio.onCurrentTimeChange(() => {
+-            // this.setDisplayValue(this.styledTime(
+-            //   integerToTime(this._uiRoot.audio.getCurrentTime())
+-            // ));
+             this.setDisplayTime();
+           });
+-        console.log("in changing display = time. by:", display);
+         this.setDisplayTime();
+-        // this.setDisplayValue(this.styledTime(
+-        //   integerToTime(this._uiRoot.audio.getCurrentTime())
+-        // ));
+-        break;
+-      case "songlength":
+-        this._displayValue = "5:58";
+         break;
+       case "songname":
+       case "songtitle":
+@@ -296,19 +280,38 @@ offsety - (int) Extra pixels to be added to or subtracted from the calculated x
+           }
+         );
+         break;
++      case "pe_info":
++      case "vid_info":
++      case "songlength":
+       case "songbitrate":
+       case "songsamplerate":
+       case "songinfo":
+-        this._displayValue = "112kbps stereo 44.";
+-        break;
+-      case "componentbucket":
+-        this._displayValue = "componentbucket";
++      case "componentbucket": {
++        // Wavedeck: real values from the host player (see bridge.js _wdInfo).
++        const kind = this._display.toLowerCase();
++        const audio: any = this._uiRoot.audio;
++        const refresh = () => {
++          const v = audio._wdInfo ? audio._wdInfo(kind) : "";
++          if (v !== this._displayValue) {
++            this._displayValue = v;
++            this._renderText();
++          }
++        };
++        this._displayValue = audio._wdInfo ? audio._wdInfo(kind) : "";
++        this._disposeDisplaySubscription = audio.onCurrentTimeChange(refresh);
++        this._disposeTrackChangedSubscription = this._uiRoot.playlist.on(
++          "trackchange",
++          refresh
++        );
+         break;
++      }
+       case "custom": // not winamp api
+         // needed by a custom DisplayHandler
+         break;
+       default:
+-        throw new Error(`Unknown text display name: "${this._display}".`);
++        // Wavedeck: an unknown display shouldn't take the whole skin down.
++        console.warn(`Unknown text display name: "${this._display}".`);
++        this._displayValue = "";
+     }
+     this._renderText();
+   }
+diff --git a/packages/webamp-modern/src/wavedeck-entry.ts b/packages/webamp-modern/src/wavedeck-entry.ts
+new file mode 100644
+index 0000000..22e4244
+--- /dev/null
++++ b/packages/webamp-modern/src/wavedeck-entry.ts
+@@ -0,0 +1,9 @@
++import "./WebampModern";
++import "./skin/SkinEngine_WAL";
++import "./skin/SkinEngine_Audion";
++import "./skin/SkinEngine_KJofol";
++import "./skin/SkinEngine_WindowsMediaPlayer";
++import "./skin/SkinEngine_WinampClassic";
++import "./skin/SkinEngine_Sonique";
++import "./skin/SkinEngine_JetAudio";
++import "./skin/SkinEngine_Cowon";

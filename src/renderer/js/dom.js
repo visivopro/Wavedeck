@@ -83,3 +83,30 @@ export function dragging(ev, onMove, onEnd) {
   window.addEventListener('mouseup', up);
   onMove(ev);
 }
+
+// Cut an element to a skin's region.txt outline. Polygons are in skin pixels
+// of a w×h window; they're drawn into an SVG clipPath in bounding-box units,
+// so the shape follows the window at any scale. Clicks outside it fall through.
+let regionSvg = null, regionSeq = 0;
+export function applyRegion(e, polys, w, h) {
+  if (e._regionId) { const old = document.getElementById(e._regionId); if (old) old.remove(); e._regionId = null; }
+  if (!polys || !polys.length) { e.style.clipPath = ''; return; }
+  const NS = 'http://www.w3.org/2000/svg';
+  if (!regionSvg) {
+    regionSvg = document.createElementNS(NS, 'svg');
+    regionSvg.setAttribute('width', '0'); regionSvg.setAttribute('height', '0');
+    regionSvg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+    document.body.appendChild(regionSvg);
+  }
+  const id = `wd-region-${++regionSeq}`;
+  const cp = document.createElementNS(NS, 'clipPath');
+  cp.setAttribute('id', id); cp.setAttribute('clipPathUnits', 'objectBoundingBox');
+  for (const poly of polys) {
+    const p = document.createElementNS(NS, 'polygon');
+    p.setAttribute('points', poly.map(([x, y]) => `${(x / w).toFixed(5)},${(y / h).toFixed(5)}`).join(' '));
+    cp.appendChild(p);
+  }
+  regionSvg.appendChild(cp);
+  e._regionId = id;
+  e.style.clipPath = `url(#${id})`;
+}

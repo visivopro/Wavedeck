@@ -117,6 +117,31 @@
       this._eqEmitter.trigger(kind);
     }
     onEqChange(kind, cb) { return this._eqEmitter.on(kind, cb); }
+    // Text fields the skin can show: song length, bitrate, playlist totals …
+    _wdInfo(kind) {
+      const a = app(); if (!a) return '';
+      const t = a.currentTrack ? a.currentTrack() : null;
+      const fmt = (s) => { s = Math.max(0, Math.round(s || 0)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${m}:${String(x).padStart(2, '0')}`; };
+      const kbps = t && t.bitrate ? String(t.bitrate) : '';
+      const khz = t && t.sampleRate ? String(Math.round(t.sampleRate / 100) / 10) : '';
+      switch (kind) {
+        case 'songlength': return t ? fmt(a.engine.duration || t.duration) : '';
+        case 'songbitrate': return kbps;
+        case 'songsamplerate': return khz ? String(Math.round(t.sampleRate / 1000)) : '';
+        case 'songinfo': {
+          if (!t) return '';
+          const ch = t.channels === 1 ? 'mono' : 'stereo';
+          return [kbps && `${kbps}kbps`, ch, khz && `${khz}khz`].filter(Boolean).join(' ');
+        }
+        case 'pe_info': {
+          const list = a.state.playlist || [];
+          const total = list.reduce((s, x) => s + (x.duration || 0), 0);
+          const cur = t ? (t.duration || a.engine.duration || 0) : 0;
+          return `${fmt(cur)}/${fmt(total)}`;
+        }
+        default: return '';
+      }
+    }
     onCurrentTimeChange(cb) { return this.on('timeupdate', cb); }
     onSeek(cb) { this._seekCbs.add(cb); return () => this._seekCbs.delete(cb); }
     onVolumeChanged(cb) { return this.on('volumechanged', cb); }

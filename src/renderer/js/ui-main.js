@@ -1,5 +1,5 @@
 // The main player window (275x116, or 14px tall in shade mode).
-import { box, canvasBox, sprite, pressable, localPoint, dragging, el } from './dom.js';
+import { box, canvasBox, sprite, pressable, localPoint, dragging, el, applyRegion } from './dom.js';
 import { drawSkinText, textBg, fmtTime } from './text.js';
 import { ClassicVis } from './vis.js';
 
@@ -193,6 +193,11 @@ export class MainWindow {
     const shade = st.shade;
     this.full.style.display = shade ? 'none' : '';
     this.shadeLayer.style.display = shade ? '' : 'none';
+    if (this._regionSkin !== s || this._regionShade !== shade) {
+      this._regionSkin = s; this._regionShade = !!shade;
+      const r = s.regions;
+      applyRegion(this.root, r && (shade ? r.windowshade : r.normal), 275, shade ? 14 : 116);
+    }
     const active = app.focused;
 
     if (shade) {

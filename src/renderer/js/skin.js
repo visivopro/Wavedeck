@@ -28,7 +28,35 @@ function finalize(name, sheets, extra = {}) {
     libraryCss: extra.libraryCss || '',
     hasNumsEx: !!extra.hasNumsEx,
     builtin: !!extra.builtin,
+    regions: extra.regions || null,
   };
+}
+
+// region.txt: the outline Winamp cuts a classic skin's windows to, as
+// polygons per window ([Normal], [Equalizer], [WindowShade], [EqualizerWS]).
+export function parseRegion(text) {
+  const out = {}; let sec = null; const raw = {};
+  for (const line of String(text).split(/\r?\n/)) {
+    const l = line.replace(/[;#].*$/, '').trim();
+    if (!l) continue;
+    const h = l.match(/^\[(.+)\]$/);
+    if (h) { sec = h[1].trim().toLowerCase(); raw[sec] = {}; continue; }
+    const kv = l.match(/^([^=]+)=(.*)$/);
+    if (sec && kv) raw[sec][kv[1].trim().toLowerCase()] = kv[2];
+  }
+  for (const [name, v] of Object.entries(raw)) {
+    const counts = String(v.numpoints || '').split(/[\s,]+/).filter(Boolean).map(Number);
+    const nums = String(v.pointlist || '').split(/[\s,]+/).filter(Boolean).map(Number);
+    if (!counts.length || nums.length < 6 || nums.some(isNaN)) continue;
+    const polys = []; let i = 0;
+    for (const n of counts) {
+      const poly = [];
+      for (let k = 0; k < n && i + 1 < nums.length; k++, i += 2) poly.push([nums[i], nums[i + 1]]);
+      if (poly.length >= 3) polys.push(poly);
+    }
+    if (polys.length) out[name] = polys;
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 // A skin generated from a theme recipe, drawn natively at `res` screen pixels per skin pixel.
@@ -151,6 +179,7 @@ export async function loadSkinArchive(bytes, fallbackName, { res = 1 } = {}) {
   const pl = await readText('pledit.txt');
   const json = await readText('skin.json');
   const css = await readText('library.css');
+  const region = await readText('region.txt');
   let meta = { name: fallbackName };
   if (json) { try { meta = { ...meta, ...JSON.parse(json) }; } catch { /* ignore */ } }
 
@@ -159,6 +188,7 @@ export async function loadSkinArchive(bytes, fallbackName, { res = 1 } = {}) {
     viscolors: vis ? parseViscolor(vis) : null,
     pledit: pl ? parsePledit(pl) : (meta.playlist || null),
     meta, libraryCss: css || '', hasNumsEx,
+    regions: region ? parseRegion(region) : null,
   });
 }
 

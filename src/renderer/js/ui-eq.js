@@ -1,5 +1,5 @@
 // Equalizer window: preamp + 10 bands, ON/AUTO, presets and response graph.
-import { box, canvasBox, sprite, pressable, localPoint, dragging } from './dom.js';
+import { box, canvasBox, sprite, pressable, localPoint, dragging, applyRegion } from './dom.js';
 
 export class EqWindow {
   constructor(app, root) {
@@ -66,6 +66,7 @@ export class EqWindow {
   applySkin() {
     this.root.querySelectorAll('*').forEach((n) => { n._sk = null; });
     for (const b of this.root.querySelectorAll('.sk')) if (b._refresh) b._refresh();
+    applyRegion(this.root, this.skin.regions && this.skin.regions.equalizer, 275, 116);
     this.update();
   }
 

@@ -154,8 +154,17 @@
   const place = () => {
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(layoutKey) || 'null'); } catch {}
+    // Dynamic containers are holders for plug-in panels (media library etc.)
+    // and stay empty here, so don't show a bare frame for them.
+    for (const c of conts()) if (c._dynamic && !c._componentGuid && c._visible !== false) { try { c.hide(); } catch {} }
     if (saved) {
-      for (const c of conts()) { const p = saved[c._id]; if (p) c.setLocation(p[0], p[1]); }
+      for (const c of conts()) {
+        const p = saved[c._id]; if (!p) continue;
+        c.setLocation(p[0], p[1]);
+        // windows the user closed (a skin's welcome or about window) stay closed
+        if (p[2] === 0 && c._visible !== false && !/^main$/i.test(c._id)) { try { c.hide(); } catch {} }
+        else if (p[2] === 1 && c._visible === false && !c._dynamic) { try { c.show(); } catch {} }
+      }
     } else {
       const vis = conts().filter(shown);
       const minX = Math.min(...vis.map((c) => c._x)), minY = Math.min(...vis.map((c) => c._y));
@@ -190,7 +199,7 @@
   };
   const remember = () => {
     const m = {};
-    for (const c of conts()) m[c._id] = [c._x, c._y];
+    for (const c of conts()) m[c._id] = [c._x, c._y, c._visible === false ? 0 : 1];
     try { localStorage.setItem(layoutKey, JSON.stringify(m)); } catch {}
   };
   setTimeout(place, 250);

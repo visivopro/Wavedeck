@@ -65,6 +65,8 @@ All coordinates are in pixels, `x,y width×height`.
 
 **viscolor.txt**: 24 lines of `r,g,b`. Line 1 background, 2 grid dots, 3–18 spectrum colors from top to bottom, 19–23 oscilloscope, 24 peak dots.
 
+**region.txt** (optional): cuts windows to a custom outline, in the same format Winamp uses. Sections `[Normal]` (main window), `[Equalizer]` and `[WindowShade]`, each with `NumPoints=` (points per polygon) and `PointList=` (x,y pairs in skin pixels). Anything outside the polygons is transparent and clicks pass through.
+
 **pledit.txt**
 ```
 [Text]
