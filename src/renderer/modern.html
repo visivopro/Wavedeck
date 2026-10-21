@@ -204,6 +204,21 @@
     if (a === 'toggle' || a === 'show') {
       if (/guid:(ml|\{?6b0edf80-c9a5-11d3-9f26-00c04f39ffc6\}?)$/.test(p)) { app.openLibrary(); return; }
       if (/guid:(avs|vis|\{?0000000a-000c-0010-ff7b-01014263450c\}?)$/.test(p)) { app.openMilkdrop(); return; }
+      // The playlist button asks for Winamp's playlist component. Some skins
+      // (D-Reliction) don't tag their playlist window with it, so the engine
+      // can't find it; Winamp still could, so find it by name.
+      if (/guid:(pl|\{?45f3f7c1-a6f3-4ee6-a15e-125e92fc3f8d\}?)$/.test(p)) {
+        const PL = /45f3f7c1-a6f3-4ee6-a15e-125e92fc3f8d/;
+        if (!conts().some((c) => PL.test(c._componentGuid || ''))) {
+          const c = conts().find((k) => /^(pledit|playlist|pl|playlisteditor)$/i.test(k._id || ''));
+          if (c) {
+            const show = a === 'show' || c._visible === false;
+            try { show ? c.show() : c.hide(); } catch {}
+            setTimeout(() => { clamp(); remember(); report(); }, 50);
+            return;
+          }
+        }
+      }
     }
     if (a === 'prefs' || a === 'preferences' || a === 'options') { app.showMainMenu(); return; }
     if (a === 'close') {

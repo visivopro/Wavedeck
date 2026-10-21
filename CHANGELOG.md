@@ -16,6 +16,7 @@
 - Modern skins scale: Ctrl + / Ctrl −, Ctrl+D, Ctrl + mouse wheel or *Options → Size*, in the same sharp whole-pixel steps as classic skins.
 - Like Winamp, a skin's transparent areas don't catch the mouse, and windows drag from any part of their artwork that isn't a control. Fixes drawers whose controls couldn't be clicked (D-Reliction's EQ, Config and Colors) and windows that wouldn't drag.
 - Fixed skin scripts mis-evaluating `&&` and `||`, which broke knobs and other scripted controls (WooHoo-FER's volume knob), and right-clicks being treated as left-clicks by skin scripts.
+- Playlist buttons work on skins whose playlist window isn't tagged as Winamp's playlist (D-Reliction).
 - A skin's Library button opens Wavedeck's Media Library; right-click always opens Wavedeck's menu; prompts such as naming a mixtape appear over the skin.
 
 **Media Library**
