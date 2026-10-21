@@ -11,7 +11,8 @@ const { Readable } = require('stream');
 
 const AUDIO_EXT = ['.mp3', '.flac', '.ogg', '.oga', '.opus', '.wav', '.m4a', '.aac', '.mp4', '.webm', '.wma'];
 const PLAYLIST_EXT = ['.m3u', '.m3u8', '.pls'];
-const SKIN_EXT = ['.wsz', '.wdskin', '.rwskin', '.zip'];
+const MODERN_EXT = ['.wal', '.wmz', '.sgf', '.kjofol', '.face', '.uib', '.jsk'];
+const SKIN_EXT = ['.wsz', '.wdskin', '.rwskin', '.zip', ...MODERN_EXT];
 const MIME = {
   '.mp3': 'audio/mpeg', '.flac': 'audio/flac', '.ogg': 'audio/ogg', '.oga': 'audio/ogg', '.opus': 'audio/ogg',
   '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.mp4': 'audio/mp4', '.webm': 'audio/webm',
@@ -320,6 +321,17 @@ function childWindowOptions(features) {
     const b = settings.milkdropBounds || {};
     return { ...base, width: b.width || 640, height: b.height || 420, x: b.x, y: b.y, minWidth: 240, minHeight: 160, backgroundColor: '#000000', title: 'Wavedeck — Visualization' };
   }
+  if (/modern\.html/.test(features)) {
+    // Modern skins can be any shape: a transparent, click-through layer over the desktop.
+    const d = screen.getDisplayMatching(mainWin ? mainWin.getBounds() : screen.getPrimaryDisplay().bounds);
+    const wa = d.workArea;
+    return {
+      ...base, x: wa.x, y: wa.y, width: wa.width, height: wa.height,
+      frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false, resizable: false, movable: false,
+      maximizable: false, minimizable: true, fullscreenable: false, skipTaskbar: false, alwaysOnTop: !!settings.alwaysOnTop,
+      title: 'Wavedeck', webPreferences: { ...base.webPreferences, backgroundThrottling: false },
+    };
+  }
   const sizes = { jump: [460, 520], info: [480, 560], about: [420, 400], studio: [470, 860] };
   const name = Object.keys(sizes).find((k) => features.includes(k + '.html'));
   const [w, h] = sizes[name] || [520, 420];
@@ -330,7 +342,7 @@ function childWindowOptions(features) {
     const right = b.x + b.width + 12, left = b.x - w - 12;
     pos = { x: right + w <= wa.x + wa.width ? right : Math.max(wa.x, left), y: Math.max(wa.y, Math.min(b.y, wa.y + wa.height - h)) };
   }
-  return { ...base, ...pos, width: w, height: Math.min(h, screen.getPrimaryDisplay().workArea.height - 20), minimizable: false, maximizable: false, resizable: name !== 'about', parent: mainWin, title: name ? { jump: 'Jump to file', info: 'File info', about: 'About Wavedeck', studio: 'Wavedeck Theme Studio' }[name] : 'Wavedeck' };
+  return { ...base, ...pos, width: w, height: Math.min(h, screen.getPrimaryDisplay().workArea.height - 20), minimizable: false, maximizable: false, resizable: name !== 'about', parent: mainWin && mainWin.isVisible() ? mainWin : undefined, title: name ? { jump: 'Jump to file', info: 'File info', about: 'About Wavedeck', studio: 'Wavedeck Theme Studio' }[name] : 'Wavedeck' };
 }
 
 function createMainWindow() {
@@ -346,7 +358,8 @@ function createMainWindow() {
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: false, backgroundThrottling: false },
   });
   mainWin.loadURL('app://wavedeck/index.html');
-  mainWin.once('ready-to-show', () => mainWin.show());
+  // With a modern skin active the classic window stays hidden; the renderer shows it if needed.
+  mainWin.once('ready-to-show', () => { if (!settings.modernSkin) mainWin.show(); });
   mainWin.on('moved', () => { const [x, y] = mainWin.getPosition(); settings.mainBounds = { x, y }; saveSettings(); });
   mainWin.on('closed', () => { mainWin = null; app.quit(); });
 
@@ -377,32 +390,39 @@ function sendOpenFiles(files) {
 }
 
 // ---------- IPC ----------
+// Dialogs and menus attach to the calling window, or to whatever Wavedeck window is
+// visible (the classic window is hidden while a modern skin is in use).
+function parentOf(e) {
+  const w = BrowserWindow.fromWebContents(e.sender);
+  if (w && w.isVisible()) return w;
+  return BrowserWindow.getAllWindows().find((x) => x.isVisible() && !x.isDestroyed());
+}
 function registerIpc() {
   const audioFilters = [
     { name: 'Audio', extensions: AUDIO_EXT.map((e) => e.slice(1)).concat(PLAYLIST_EXT.map((e) => e.slice(1))) },
     { name: 'All files', extensions: ['*'] },
   ];
   ipcMain.handle('dialog:openFiles', async (e) => {
-    const r = await dialog.showOpenDialog(BrowserWindow.fromWebContents(e.sender), { properties: ['openFile', 'multiSelections'], filters: audioFilters });
+    const r = await dialog.showOpenDialog(parentOf(e), { properties: ['openFile', 'multiSelections'], filters: audioFilters });
     return r.canceled ? [] : expandPaths(r.filePaths);
   });
   ipcMain.handle('dialog:openFolder', async (e, opts = {}) => {
-    const r = await dialog.showOpenDialog(BrowserWindow.fromWebContents(e.sender), { properties: ['openDirectory', 'multiSelections'], title: opts.title });
+    const r = await dialog.showOpenDialog(parentOf(e), { properties: ['openDirectory', 'multiSelections'], title: opts.title });
     if (r.canceled) return opts.raw ? [] : [];
     return opts.raw ? r.filePaths : expandPaths(r.filePaths);
   });
   ipcMain.handle('dialog:openPlaylist', async (e) => {
-    const r = await dialog.showOpenDialog(BrowserWindow.fromWebContents(e.sender), { properties: ['openFile'], filters: [{ name: 'Playlists', extensions: ['m3u', 'm3u8', 'pls'] }] });
+    const r = await dialog.showOpenDialog(parentOf(e), { properties: ['openFile'], filters: [{ name: 'Playlists', extensions: ['m3u', 'm3u8', 'pls'] }] });
     return r.canceled ? null : readPlaylist(r.filePaths[0]);
   });
   ipcMain.handle('dialog:savePlaylist', async (e, items) => {
-    const r = await dialog.showSaveDialog(BrowserWindow.fromWebContents(e.sender), { defaultPath: 'playlist.m3u8', filters: [{ name: 'M3U playlist', extensions: ['m3u8', 'm3u'] }, { name: 'PLS playlist', extensions: ['pls'] }] });
+    const r = await dialog.showSaveDialog(parentOf(e), { defaultPath: 'playlist.m3u8', filters: [{ name: 'M3U playlist', extensions: ['m3u8', 'm3u'] }, { name: 'PLS playlist', extensions: ['pls'] }] });
     if (r.canceled) return false;
     await writePlaylist(r.filePath, items);
     return true;
   });
   ipcMain.handle('dialog:openSkin', async (e) => {
-    const r = await dialog.showOpenDialog(BrowserWindow.fromWebContents(e.sender), { properties: ['openFile'], filters: [{ name: 'Skins', extensions: ['wsz', 'wdskin', 'rwskin', 'zip'] }] });
+    const r = await dialog.showOpenDialog(parentOf(e), { properties: ['openFile'], filters: [{ name: 'Skins', extensions: ['wsz', 'wdskin', 'rwskin', 'zip', ...MODERN_EXT.map((x) => x.slice(1))] }] });
     if (r.canceled) return null;
     const src = r.filePaths[0];
     await fsp.mkdir(skinsDir(), { recursive: true });
@@ -411,12 +431,12 @@ function registerIpc() {
     return dest;
   });
   ipcMain.handle('dialog:saveFile', async (e, { defaultPath, data, filters }) => {
-    const r = await dialog.showSaveDialog(BrowserWindow.fromWebContents(e.sender), { defaultPath, filters });
+    const r = await dialog.showSaveDialog(parentOf(e), { defaultPath, filters });
     if (r.canceled) return null;
     await fsp.writeFile(r.filePath, Buffer.from(data));
     return r.filePath;
   });
-  ipcMain.handle('dialog:message', async (e, opts) => dialog.showMessageBox(BrowserWindow.fromWebContents(e.sender), opts));
+  ipcMain.handle('dialog:message', async (e, opts) => dialog.showMessageBox(parentOf(e), opts));
 
   ipcMain.handle('fs:expand', (e, paths) => expandPaths(paths));
   ipcMain.handle('fs:readBinary', async (e, p) => new Uint8Array(await fsp.readFile(p)));
@@ -457,7 +477,7 @@ function registerIpc() {
 
   ipcMain.handle('lib:get', () => { const l = loadLibrary(); return { folders: l.folders, tracks: l.tracks, servers: l.servers }; });
   ipcMain.handle('lib:addFolder', async (e) => {
-    const r = await dialog.showOpenDialog(BrowserWindow.fromWebContents(e.sender), { properties: ['openDirectory', 'multiSelections'], title: 'Add music folder (local or network share)' });
+    const r = await dialog.showOpenDialog(parentOf(e), { properties: ['openDirectory', 'multiSelections'], title: 'Add music folder (local or network share)' });
     if (r.canceled) return loadLibrary().folders;
     const l = loadLibrary();
     for (const f of r.filePaths) if (!l.folders.includes(f)) l.folders.push(f);
@@ -508,7 +528,7 @@ function registerIpc() {
   ipcMain.handle('util:md5', (e, s) => crypto.createHash('md5').update(String(s)).digest('hex'));
   ipcMain.handle('util:openExternal', (e, url) => { if (/^https?:\/\//.test(url)) shell.openExternal(url); });
   ipcMain.handle('util:popupMenu', (e, template) => new Promise((resolve) => {
-    const win = BrowserWindow.fromWebContents(e.sender);
+    const win = parentOf(e);
     const build = (items) => items.map((it) => {
       if (it.type === 'separator') return { type: 'separator' };
       const o = { label: it.label, enabled: it.enabled !== false, accelerator: it.accelerator, registerAccelerator: false };
@@ -534,6 +554,9 @@ function registerIpc() {
     w.setResizable(false);
   });
   ipcMain.handle('win:workArea', (e) => screen.getDisplayMatching(BrowserWindow.fromWebContents(e.sender).getBounds()).workArea);
+  ipcMain.handle('win:ignoreMouse', (e, on) => { const w = BrowserWindow.fromWebContents(e.sender); if (w) w.setIgnoreMouseEvents(!!on, { forward: true }); });
+  ipcMain.handle('win:hideMain', () => { if (mainWin) mainWin.hide(); });
+  ipcMain.handle('win:showMain', () => { if (mainWin) { mainWin.show(); mainWin.focus(); } });
   ipcMain.handle('win:minimize', (e) => BrowserWindow.fromWebContents(e.sender).minimize());
   ipcMain.handle('win:close', (e) => BrowserWindow.fromWebContents(e.sender).close());
   ipcMain.handle('win:alwaysOnTop', (e, on) => { BrowserWindow.fromWebContents(e.sender).setAlwaysOnTop(!!on); settings.alwaysOnTop = !!on; saveSettings(); });

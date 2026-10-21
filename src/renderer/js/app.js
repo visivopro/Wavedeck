@@ -33,6 +33,10 @@ export const EQ_PRESETS = {
 };
 
 let nextId = 1;
+// Classic skins draw with Wavedeck's own renderer; "modern" formats (Winamp 5, WMP,
+// Sonique, K-Jofol, Audion, Cowon, JetAudio) use the bundled modern-skin engine.
+const MODERN_RE = /\.(wal|wmz|sgf|kjofol|face|uib|jsk)$/i;
+const SKIN_RE = /\.(wsz|wdskin|rwskin|wal|wmz|sgf|kjofol|face|uib|jsk)$/i;
 const baseName = (p) => decodeURIComponent(String(p).split(/[\\/]/).pop() || p);
 const stripExt = (n) => n.replace(/\.[a-z0-9]{2,5}$/i, '');
 
@@ -88,6 +92,7 @@ class App {
     window.wavedeckPlayer = this.publicApi();
 
     if (s.skinFile) await this.loadSkinFile(s.skinFile, true);
+    if (s.modernSkin) this.enterModern(s.modernSkin);
     if (!s.skinFile || this.skin.builtin) this.setSkin(defaultSkin(this.renderRes()));
     if (Array.isArray(s.playlist) && s.playlist.length) {
       this.state.playlist = s.playlist.map((t) => ({ ...t, id: nextId++ }));
@@ -157,9 +162,9 @@ class App {
   }
 
   async openPaths(paths, play) {
-    const skins = paths.filter((p) => /\.(wsz|wdskin|rwskin)$/i.test(p));
+    const skins = paths.filter((p) => SKIN_RE.test(p));
     if (skins.length) await this.loadSkinFile(skins[0]);
-    const rest = paths.filter((p) => !/\.(wsz|wdskin|rwskin)$/i.test(p));
+    const rest = paths.filter((p) => !SKIN_RE.test(p));
     if (!rest.length) return;
     const files = await R.expand(rest);
     await this.addTracks(files, { play, replace: play });
@@ -519,6 +524,8 @@ class App {
   // Recipe themes are drawn natively at the current scale; classic bitmap skins stay at 1x.
   renderRes() { return Math.max(1, Math.min(6, this.state.scaleK || 1)); }
   async loadSkinFile(file, silent) {
+    if (MODERN_RE.test(file)) { this.enterModern(file); return true; }
+    if (this.modernActive()) this.exitModern();
     try {
       const bytes = await R.readBinary(file);
       const skin = await loadSkinArchive(bytes, stripExt(baseName(file)), { res: this.renderRes() });
@@ -532,7 +539,7 @@ class App {
       return false;
     }
   }
-  useDefaultSkin() { this.setSkin(defaultSkin(this.renderRes())); R.setSettings({ skinFile: null }); this.settings.skinFile = null; }
+  useDefaultSkin() { if (this.modernActive()) this.exitModern(); this.setSkin(defaultSkin(this.renderRes())); R.setSettings({ skinFile: null }); this.settings.skinFile = null; }
   setSkin(skin) {
     this.skin = skin;
     setAllCanvasRes(skin.res || 1);
@@ -552,7 +559,58 @@ class App {
   }
 
   // ---------------- Theme Studio ----------------
+  // ---------------- modern skins (Winamp 5 .wal and friends) ----------------
+  modernActive() { return !!(this.modernWin && !this.modernWin.closed); }
+  // Closing the skin window yourself (taskbar, Alt+F4) exits Wavedeck, like Winamp.
+  // Closes Wavedeck makes on purpose (switching skins, going back to classic, a skin
+  // that failed to load) are remembered here so they don't.
+  closeModernWin(w) {
+    if (!w) return;
+    (this.intentionalCloses ||= new WeakSet()).add(w);
+    if (!w.closed) w.close();
+  }
+  enterModern(file) {
+    const old = this.modernWin;
+    this.modernWin = null;
+    this.closeModernWin(old);
+    const w = window.open(`app://wavedeck/modern.html?skin=${encodeURIComponent(file)}`, `modern${Date.now()}`, 'modern');
+    this.modernWin = w;
+    const watch = setInterval(() => {
+      if (!w.closed) return;
+      clearInterval(watch);
+      const intended = this.intentionalCloses && this.intentionalCloses.has(w);
+      if (this.modernWin === w) this.modernWin = null;
+      if (!intended) this.quit();
+    }, 400);
+  }
+  modernReady(file) {
+    this.settings.modernSkin = file;
+    R.setSettings({ modernSkin: file });
+    R.win.hideMain();
+    if (this.studioWin && !this.studioWin.closed) this.studioWin.close();
+  }
+  modernFailed(file, msg) {
+    const w = this.modernWin;
+    this.modernWin = null;
+    if (w) (this.intentionalCloses ||= new WeakSet()).add(w);
+    this.settings.modernSkin = null;
+    R.setSettings({ modernSkin: null });
+    R.win.showMain();
+    R.message({ type: 'error', message: "Couldn't load that skin.", detail: `${file.split(/[\\/]/).pop()}: ${msg}` });
+  }
+  exitModern() {
+    if (!this.modernActive()) return;
+    const w = this.modernWin;
+    this.modernWin = null;
+    this.closeModernWin(w);
+    this.settings.modernSkin = null;
+    R.setSettings({ modernSkin: null });
+    R.win.showMain();
+  }
+  quit() { R.win.close(); }
+
   openStudio() {
+    if (this.modernActive()) this.exitModern();
     if (this.studioWin && !this.studioWin.closed) { this.studioWin.focus(); return; }
     this.studioWin = window.open('app://wavedeck/studio.html', 'studio', 'studio');
   }
@@ -635,12 +693,16 @@ class App {
       { id: 'skin:export', label: 'Export skin template (.wdskin)…' },
       { type: 'separator' },
       { id: 'skin:default', label: '<Wavedeck Midnight> (built-in)', checked: this.skin.builtin, radio: true },
-      ...skins.map((s, i) => ({ id: `skin:${i}`, label: s.name, checked: s.file === cur && !this.skin.builtin, radio: true })),
+      ...skins.filter((s) => !MODERN_RE.test(s.file)).map((s) => ({ id: `skin:${skins.indexOf(s)}`, label: s.name, checked: s.file === cur && !this.skin.builtin && !this.modernActive(), radio: true })),
+      ...(skins.some((s) => MODERN_RE.test(s.file)) ? [{ type: 'separator' }, { label: 'Modern skins', enabled: false }] : []),
+      ...skins.filter((s) => MODERN_RE.test(s.file)).map((s) => ({ id: `skin:${skins.indexOf(s)}`, label: s.name, checked: this.modernActive() && s.file === this.settings.modernSkin, radio: true })),
+      ...(this.modernActive() ? [{ type: 'separator' }, { id: 'skin:classic', label: 'Back to classic skin' }] : []),
     ];
   }
   async skinHandlers() {
     const h = {
       'skin:studio': () => this.openStudio(),
+      'skin:classic': () => this.exitModern(),
       'skin:load': async () => { const f = await R.openSkin(); if (f) this.loadSkinFile(f); },
       'skin:dir': () => R.openSkinsDir(),
       'skin:export': () => this.exportSkinTemplate(),
@@ -967,7 +1029,7 @@ class App {
 
   // ---------------- keyboard ----------------
   bindKeys() {
-    window.addEventListener('keydown', (e) => {
+    const handler = (e) => {
       if (e.target.closest && e.target.closest('input, textarea')) return;
       const k = e.key.toLowerCase(), c = e.ctrlKey || e.metaKey, a = e.altKey, s = e.shiftKey;
       const act = (fn) => { e.preventDefault(); fn(); };
@@ -1001,7 +1063,9 @@ class App {
         home: () => this.pl.scrollBy(-1e9), end: () => this.pl.scrollBy(1e9),
       };
       if (map[k]) act(map[k]);
-    });
+    };
+    this.keyHandler = handler;
+    window.addEventListener('keydown', handler);
   }
 
   bindDrop() {
@@ -1013,7 +1077,7 @@ class App {
       const paths = [...e.dataTransfer.files].map((f) => R.pathForFile(f)).filter(Boolean);
       if (!paths.length) return;
       const onPlaylist = e.target.closest && e.target.closest('#pl');
-      const skins = paths.filter((p) => /\.(wsz|wdskin|rwskin)$/i.test(p));
+      const skins = paths.filter((p) => SKIN_RE.test(p));
       if (skins.length) { await this.loadSkinFile(skins[0]); return; }
       const files = await R.expand(paths);
       this.addTracks(files, { play: !onPlaylist, replace: !onPlaylist && !e.shiftKey });

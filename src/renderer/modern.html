@@ -1,0 +1,191 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Wavedeck</title>
+<link rel="stylesheet" href="modern/css/webamp.css">
+<style id="bitmap-css"></style>
+<style id="truetypefont-css"></style>
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  #web-amp { position: absolute; inset: 0; }
+  #loading { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); font: 600 13px "Segoe UI", system-ui, sans-serif; color: #fff; background: rgba(13,15,20,.85); padding: 10px 16px; border-radius: 8px; pointer-events: none; }
+</style>
+<script src="modern/bridge.js"></script>
+<script src="modern/webamp-modern.js"></script>
+</head>
+<body>
+<div id="web-amp"></div>
+<div id="loading">Loading skin…</div>
+<script>
+(async () => {
+  const R = window.wavedeck;
+  const player = window.opener && window.opener.wavedeckPlayer;
+  const app = player && player.app;
+  const skinPath = new URLSearchParams(location.search).get('skin');
+  const loading = document.getElementById('loading');
+  if (!app || !skinPath) { window.close(); return; }
+
+  // ---------- click-through: only the skin itself takes the mouse ----------
+  let ignoring = null;
+  const setIgnore = (v) => { if (v !== ignoring) { ignoring = v; R.win.ignoreMouse(v); } };
+  const overSkin = (x, y) => {
+    const el = document.elementFromPoint(x, y);
+    return !!(el && el !== document.body && el !== document.documentElement && el.id !== 'web-amp' && !/^ui-root/.test(el.id || ''));
+  };
+  let held = false;
+  window.addEventListener('mousedown', () => { held = true; });
+  window.addEventListener('mouseup', () => { held = false; });
+  window.addEventListener('mousemove', (e) => { if (!held) setIgnore(!overSkin(e.clientX, e.clientY)); }, true);
+  document.addEventListener('mouseleave', () => { if (!held) setIgnore(true); });
+  setIgnore(true);
+
+  // ---------- load the skin ----------
+  let wm;
+  try {
+    let fail;
+    const failed = new Promise((_, reject) => { fail = reject; });
+    const onReject = (e) => { const m = String((e.reason && e.reason.message) || e.reason || ''); if (!document.querySelector('#web-amp container *')) fail(new Error(/central directory|zip|corrupt/i.test(m) ? "The file isn't a valid skin. It may be damaged or only partly downloaded." : (m || 'This skin could not be read.'))); };
+    window.addEventListener('unhandledrejection', onReject);
+    wm = new window.WebampModern(document.getElementById('web-amp'), { skin: 'media://local/?p=' + encodeURIComponent(skinPath), tracks: [] });
+    await Promise.race([failed, new Promise((resolve, reject) => {
+      const t0 = Date.now();
+      const check = () => {
+        const n = document.querySelectorAll('#web-amp container').length;
+        if (n && document.querySelector('#web-amp container *')) return resolve();
+        if (Date.now() - t0 > 20000) return reject(new Error('This skin did not finish loading.'));
+        setTimeout(check, 150);
+      };
+      check();
+    })]);
+    window.removeEventListener('unhandledrejection', onReject);
+  } catch (e) {
+    app.modernFailed(skinPath, e.message || String(e));
+    window.close();
+    return;
+  }
+  loading.remove();
+  const ui = wm._uiRoot;
+
+  // ---------- playlist: mirror Wavedeck's playlist into the skin ----------
+  const pl = ui.playlist;
+  const toTrack = (t, i) => ({
+    id: i + 1, filename: t.path || t.url || '', duration: t.duration || 0,
+    title: app.trackTitle(t), rating: 0,
+    metadata: { artist: t.artist || '', title: t.title || app.trackTitle(t), album: t.album || '' },
+  });
+  let mirrorVersion = -1;
+  const sync = () => {
+    if (app.version === mirrorVersion) return;
+    mirrorVersion = app.version;
+    pl._tracks = app.state.playlist.map(toTrack);
+    pl._currentIndex = app.state.current;
+    pl.trigger('trackchange');
+  };
+  pl.playtrack = (i) => app.playIndex(i);
+  pl.clear = () => app.clearPlaylist();
+  pl.removetrack = (i) => app.removeIndices([i]);
+  pl.enqueuefile = (f) => app.addTracks([f]);
+  pl.addTrack = (t) => app.addTracks([t.file ? R.pathForFile(t.file) : t.filename]);
+  const move = (from, to) => {
+    const list = app.state.playlist; if (from < 0 || to < 0 || from >= list.length || to >= list.length) return;
+    const cur = app.currentTrack(); const [x] = list.splice(from, 1); list.splice(to, 0, x);
+    app.state.current = cur ? list.indexOf(cur) : -1; app.changed();
+  };
+  pl.moveup = (i) => move(i, i - 1);
+  pl.movedown = (i) => move(i, i + 1);
+  pl.moveto = (i, pos) => move(i, pos);
+  pl.swaptracks = (a, b) => { const l = app.state.playlist; if (!l[a] || !l[b]) return; const cur = app.currentTrack(); [l[a], l[b]] = [l[b], l[a]]; app.state.current = cur ? l.indexOf(cur) : -1; app.changed(); };
+  sync();
+  setInterval(sync, 300);
+
+  // album art
+  const art = async (t) => {
+    let url = null;
+    if (t && t.path) { try { url = await R.cover(t.path); } catch {} }
+    window.__wdAudio._albumArtUrl = url;
+    pl.trigger('trackchange');
+  };
+  player.on('trackchange', (t) => { sync(); art(t); });
+  art(player.getCurrent());
+
+  // shuffle / repeat follow Wavedeck's settings both ways
+  try {
+    const repTo = (r) => (r === 'one' ? '-1' : r ? '1' : '0');
+    pl._shuffleAttrib.setdata(app.state.shuffle ? '1' : '0');
+    pl._repeatAttrib.setdata(repTo(app.state.repeat));
+    pl._shuffleAttrib.on('datachanged', () => { app.state.shuffle = pl._shuffleAttrib.getdata() === '1'; app.persist(); });
+    pl._repeatAttrib.on('datachanged', () => { const v = Number(pl._repeatAttrib.getdata()); app.state.repeat = v === -1 ? 'one' : !!v; app.persist(); });
+  } catch (e) { console.warn('shuffle/repeat sync unavailable', e); }
+
+  // ---------- actions: Wavedeck handles next/prev/open/menus/close ----------
+  ui.next = () => app.next();
+  ui.previous = () => app.prev();
+  ui.eject = async () => { const files = await R.openFiles(); if (files.length) app.addTracks(files, { play: true, replace: true }); };
+  const dispatch = ui.dispatch.bind(ui);
+  ui.dispatch = (action, param, target) => {
+    const a = String(action || '').toLowerCase();
+    if (a === 'sysmenu' || (a === 'menu' && /^main$/i.test(param || ''))) { app.showMainMenu(); return; }
+    if (a === 'minimize') { R.win.minimize(); return; }
+    if (a === 'close') {
+      const c = document.activeElement && document.activeElement.closest('container');
+      const id = c && (c.getAttribute('id') || '').toLowerCase();
+      if (!id || id === 'main') { app.quit(); return; }
+    }
+    return dispatch(action, param, target);
+  };
+  // Right-click on a skin part that has no menu of its own opens Wavedeck's menu.
+  window.addEventListener('contextmenu', (e) => { if (!e.defaultPrevented) { e.preventDefault(); app.showMainMenu(); } });
+
+  // ---------- keyboard and drag & drop go to Wavedeck ----------
+  window.addEventListener('keydown', (e) => app.keyHandler && app.keyHandler(e));
+  document.addEventListener('dragover', (e) => { e.preventDefault(); setIgnore(false); });
+  document.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    const paths = [...e.dataTransfer.files].map((f) => R.pathForFile(f)).filter(Boolean);
+    if (paths.length) app.openPaths(paths, true);
+  });
+
+  // ---------- window positions: open where the player was, remember per skin ----------
+  const conts = () => (ui._containers || []).filter((c) => c && c._div);
+  const size = (c) => { try { return [c.getWidth() || 0, c.getHeight() || 0]; } catch { return [0, 0]; } };
+  const shown = (c) => c._visible !== false && size(c)[0] > 0;
+  const layoutKey = 'wd-modern-layout:' + skinPath.toLowerCase();
+  const place = () => {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(layoutKey) || 'null'); } catch {}
+    if (saved) {
+      for (const c of conts()) { const p = saved[c._id]; if (p) c.setLocation(p[0], p[1]); }
+    } else {
+      const vis = conts().filter(shown);
+      const minX = Math.min(...vis.map((c) => c._x)), minY = Math.min(...vis.map((c) => c._y));
+      const ox = Math.max(0, (window.opener.screenX || 0) - window.screenX), oy = Math.max(0, (window.opener.screenY || 0) - window.screenY);
+      if (isFinite(minX)) for (const c of conts()) c.setLocation(c._x - minX + ox, c._y - minY + oy);
+    }
+    clamp();
+  };
+  // keep every skin window on screen
+  const clamp = () => {
+    const W = innerWidth, H = innerHeight;
+    for (const c of conts().filter(shown)) {
+      const [w, h] = size(c);
+      const x = Math.min(Math.max(0, c._x), Math.max(0, W - w));
+      const y = Math.min(Math.max(0, c._y), Math.max(0, H - h));
+      if (x !== c._x || y !== c._y) c.setLocation(x, y);
+    }
+  };
+  const remember = () => {
+    const m = {};
+    for (const c of conts()) m[c._id] = [c._x, c._y];
+    try { localStorage.setItem(layoutKey, JSON.stringify(m)); } catch {}
+  };
+  setTimeout(place, 250);
+  window.addEventListener('mouseup', () => setTimeout(() => { clamp(); remember(); }, 60));
+  window.addEventListener('resize', clamp);
+
+  window.wavedeckModern = { wm, ui };
+  app.modernReady(skinPath);
+})();
+</script>
+</body>
+</html>

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.0 (October 21, 2026)
+
+**Modern skins**
+
+- Load Winamp 5 / Winamp3 freeform skins (`.wal`), including skins with MAKI scripts, color themes, drawers and custom shapes.
+- Also loads Windows Media Player (`.wmz`), Sonique (`.sgf`), K-Jofol (`.kjofol`), Audion (`.face`), Cowon (`.uib`) and JetAudio (`.jsk`) skins.
+- Modern skins float on the desktop in their own shapes; empty areas click through to whatever is behind them.
+- The skin's buttons, sliders, EQ, visualizer and playlist window all drive Wavedeck, so your library, Browse tab, mixtapes and Navidrome streaming keep working.
+- Skins open where your player was and remember their position, and the last skin you used comes back on startup.
+- Right-click opens Wavedeck's menu; choose *Skins → Back to classic skin* to return.
+- Powered by the open-source Webamp Modern engine (MIT license). Very script-heavy skins may not work perfectly yet.
+
 ## 1.3.0 (October 21, 2026)
 
 **Browse tab, Shuffle all and Mixtapes**

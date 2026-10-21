@@ -1,5 +1,7 @@
 # Making skins
 
+> Wavedeck also **loads** modern Winamp 5 skins (`.wal`) and Windows Media Player, Sonique, K-Jofol, Audion, Cowon and JetAudio skins. Just drop one on the player. This guide covers making Wavedeck's own classic-layout skins.
+
 Most people should use **Theme Studio** (right-click the player → Theme Studio). It builds a complete theme from design choices, with no drawing needed. Themes made there contain a `recipe.json` and are redrawn at the player's current size, so they stay sharp when scaled. They also include ordinary sprite sheets, so everything below still applies if you want to hand-edit one: use *Export the sprite sheets* at the bottom of Theme Studio.
 
 The rest of this page is for artists who want full pixel control.

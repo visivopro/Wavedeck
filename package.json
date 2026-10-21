@@ -1,6 +1,6 @@
 {
   "name": "wavedeck-player",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "A classic-style FLAC/MP3 player with skins, EQ, visualizations and a media library.",
   "main": "src/main.js",
   "scripts": {
@@ -100,7 +100,11 @@
       {
         "ext": [
           "wsz",
-          "wdskin"
+          "wdskin",
+          "rwskin",
+          "wal",
+          "wmz",
+          "sgf"
         ],
         "name": "Wavedeck skin",
         "description": "Player skin",
