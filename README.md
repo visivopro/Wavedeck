@@ -2,6 +2,8 @@
 
 A free, classic-style music player for Windows. It's a FLAC and MP3 player first, with the three-window layout, skins and visualizer people loved in Winamp 2, plus a modern media library and network streaming.
 
+**[Download the latest version](https://github.com/visivopro/Wavedeck/releases/latest)** · **[Website](https://visivopro.github.io/Wavedeck/)** · **[What's new](CHANGELOG.md)**
+
 ## Features
 
 **Classic player**

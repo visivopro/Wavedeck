@@ -134,8 +134,11 @@ p { margin: 0 0 1rem; max-width: var(--measure); }
   border-top: 1px solid var(--alu-lo);
 }
 .feature.flip { grid-template-columns: minmax(0, 7fr) minmax(0, 4fr); }
+#browse, #mixtapes { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+#browse .copy { order: 2; }
 .feature.flip .copy { order: 2; }
 .shot { border-radius: 10px; box-shadow: 0 24px 50px -24px rgba(20,24,32,.55), 0 0 0 1px rgba(0,0,0,.08); display: block; }
+.shot.tall { max-width: 400px; width: 100%; justify-self: center; }
 .pair { display: grid; grid-template-columns: 1fr 1.08fr; gap: 1.25rem; align-items: start; }
 .pair .shot:last-child { margin-top: 3rem; }
 
@@ -179,6 +182,8 @@ footer a { margin: 0 .6rem; }
 @media (max-width: 900px) {
   .hero, .feature, .feature.flip { grid-template-columns: 1fr; }
   .feature.flip .copy { order: 0; }
+  #browse, #mixtapes { grid-template-columns: 1fr; }
+  #browse .copy { order: 0; }
   .bar nav { display: none; }
   .bar .btn { margin-left: auto; }
   #player { width: min(360px, 100%); }
