@@ -743,7 +743,7 @@ class App {
       { id: 'openurl', label: 'Play URL…', accelerator: 'Ctrl+L' },
       { type: 'separator' },
       { id: 'library', label: modern ? 'Media Library: servers, mixtapes, playlists' : 'Media Library', accelerator: 'Alt+L' },
-      ...(modern ? [] : [{ id: 'browse', label: 'Browse in playlist window', accelerator: 'Tab' }]),
+      { id: 'browse', label: modern ? 'Browse music in the playlist window' : 'Browse in playlist window', accelerator: 'Tab', ...(modern ? { type: 'checkbox', checked: st.plMode === 'browse' } : {}) },
       { label: 'Play a mixtape', submenu: tapes.length ? tapes.map((m) => ({ id: `playmx:${m.id}`, label: `${m.name}  (${m.tracks.length})` })) : [{ label: 'No mixtapes yet', enabled: false }] },
       { id: 'savemix', label: 'Save playlist as mixtape…' },
       { id: 'milkdrop', label: 'Visualization window', accelerator: 'Ctrl+Shift+K' },
@@ -784,7 +784,7 @@ class App {
     ];
     this.menu(tpl, {
       about: () => this.showAbout(), openfile: () => this.openFiles(true), openfolder: () => this.openFolder(true), openurl: () => this.openUrl(),
-      library: () => this.openLibrary(), browse: () => { if (this.modernActive()) { this.openLibrary(); return; } if (!this.state.plVisible) this.togglePlWindow(); this.setPlMode('browse'); }, savemix: () => this.saveAsMixtape(), milkdrop: () => this.openMilkdrop(), eqwin: () => this.toggleEqWindow(), plwin: () => this.togglePlWindow(),
+      library: () => this.openLibrary(), browse: () => { if (this.modernActive()) { this.setPlMode(st.plMode === 'browse' ? 'playlist' : 'browse'); return; } if (!this.state.plVisible) this.togglePlWindow(); this.setPlMode('browse'); }, savemix: () => this.saveAsMixtape(), milkdrop: () => this.openMilkdrop(), eqwin: () => this.toggleEqWindow(), plwin: () => this.togglePlWindow(),
       ontop: () => this.toggleOnTop(), double: () => this.toggleDouble(), shade: () => this.toggleShade(), timemode: () => this.toggleTimeMode(),
       scroll: () => { this.state.scrollTitle = !this.state.scrollTitle; this.persist(); },
       repeat: () => this.toggleRepeat(), shuffle: () => this.toggleShuffle(),
@@ -1075,7 +1075,7 @@ class App {
       if (c && k === 's') return act(() => this.savePlaylistFile());
       if (c || a) return;
       if (this.state.plVisible && this.state.plMode === 'browse' && this.browseKeys(k, e)) return;
-      if (k === 'tab' && this.state.plVisible) return act(() => this.setPlMode(this.state.plMode === 'browse' ? 'playlist' : 'browse'));
+      if (k === 'tab' && (this.state.plVisible || this.modernActive())) return act(() => this.setPlMode(this.state.plMode === 'browse' ? 'playlist' : 'browse'));
       const map = {
         z: () => this.prev(), x: () => this.play(), c: () => this.pause(), v: () => (s ? this.stop() : this.stop()), b: () => this.next(),
         l: () => (s ? this.openFolder(true) : this.openFiles(true)), j: () => this.openTool('jump'), r: () => this.toggleRepeat(), s: () => this.toggleShuffle(),

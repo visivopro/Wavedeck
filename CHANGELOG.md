@@ -17,6 +17,8 @@
 - Like Winamp, a skin's transparent areas don't catch the mouse, and windows drag from any part of their artwork that isn't a control. Fixes drawers whose controls couldn't be clicked (D-Reliction's EQ, Config and Colors) and windows that wouldn't drag.
 - Fixed skin scripts mis-evaluating `&&` and `||`, which broke knobs and other scripted controls (WooHoo-FER's volume knob), and right-clicks being treated as left-clicks by skin scripts.
 - Playlist buttons work on skins whose playlist window isn't tagged as Winamp's playlist (D-Reliction).
+- **Browse in the skin's playlist window:** press Tab (or right-click → *Browse music in the playlist window*) and the skin's own playlist lists Mixtapes, This PC and your Navidrome server, down to artists, albums, songs and server playlists. Double-click to open or play; Tab again returns to the queue.
+- Invisible "mousetrap" drag handles work, so playlist windows drag instead of only resizing.
 - A skin's Library button opens Wavedeck's Media Library; right-click always opens Wavedeck's menu; prompts such as naming a mixtape appear over the skin.
 
 **Media Library**

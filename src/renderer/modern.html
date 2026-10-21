@@ -58,9 +58,11 @@
     return null;
   };
   // Is el's own image drawn (non-transparent) at x,y? null when it has no image.
-  const imageOpaqueAt = (el, x, y) => {
+  const imageOpaqueAt = (el, x, y, drawn = false) => {
     const cs = getComputedStyle(el);
-    if (cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') return false;
+    if (cs.visibility === 'hidden' || cs.display === 'none') return false;
+    // an invisible (alpha 0) layer still takes the mouse in Winamp: the "mousetrap" trick
+    if (drawn && cs.opacity === '0') return false;
     const m = /url\("?(.*?)"?\)/.exec(cs.backgroundImage || '');
     if (!m) return null;
     const r = el.getBoundingClientRect();
@@ -81,11 +83,13 @@
     if (el.tagName === 'LAYOUT') {
       // a window is "there" wherever any of its pictures (including ghost ones) is drawn
       for (const c of el.querySelectorAll('layer, animatedlayer')) {
-        if (imageOpaqueAt(c, x, y)) return false;
+        if (imageOpaqueAt(c, x, y, true)) return false;
       }
       return true;
     }
-    if (own === null) return el.tagName !== 'LAYER' || !el.childElementCount; // an empty frame or group
+    // a layer without an image is a deliberate hit area (a drag handle or a mousetrap);
+    // an empty frame or group is not
+    if (own === null) return el.tagName !== 'LAYER';
     return true;
   };
   let passed = [];
@@ -146,20 +150,43 @@
     title: app.trackTitle(t), rating: 0,
     metadata: { artist: t.artist || '', title: t.title || app.trackTitle(t), album: t.album || '' },
   });
-  let mirrorVersion = -1;
+  // Browse mode (Tab, or the menu): the skin's playlist window lists Mixtapes,
+  // This PC and your servers instead of the queue, like the classic Browse tab.
+  const browsing = () => app.state.plMode === 'browse';
+  const browseRow = (it, i) => {
+    const label = it.kind === 'up' ? '..  (back)'
+      : it.kind === 'folder' ? `[${it.label}]${it.right ? `  ${it.right}` : ''}`
+      : it.kind === 'song' ? it.label.replace(/^\d+\.\s+/, '')
+      : it.label;
+    return { id: i + 1, filename: '', duration: (it.track && it.track.duration) || 0, title: label, rating: 0, metadata: { artist: '', title: label, album: '' } };
+  };
+  let mirrorKey = '';
   const sync = () => {
-    if (app.version === mirrorVersion) return;
-    mirrorVersion = app.version;
-    pl._tracks = app.state.playlist.map(toTrack);
-    pl._currentIndex = app.state.current;
+    const b = app.browser;
+    const key = browsing() ? `b${b.version}:${b.sel}` : `p${app.version}`;
+    if (key === mirrorKey) return;
+    mirrorKey = key;
+    if (browsing()) {
+      pl._tracks = b.items.map(browseRow);
+      pl._currentIndex = b.sel;
+    } else {
+      pl._tracks = app.state.playlist.map(toTrack);
+      pl._currentIndex = app.state.current;
+    }
     pl.trigger('trackchange');
   };
-  pl.playtrack = (i) => app.playIndex(i);
-  pl.clear = () => app.clearPlaylist();
-  pl.removetrack = (i) => app.removeIndices([i]);
+  // rows show "artist - title" (or just the title), folders get no time, and the
+  // song ticker always shows what's actually playing, even while browsing
+  pl.gettitle = (i) => { const t = pl._tracks[i]; if (!t) return ''; const m = t.metadata || {}; return m.artist ? `${m.artist} - ${m.title}` : (m.title || t.title || ''); };
+  pl.getlength = (i) => { const t = pl._tracks[i]; if (!t || !t.duration) return ''; const d = Math.round(t.duration); return `${Math.floor(d / 60)}:${String(d % 60).padStart(2, '0')}`; };
+  pl.getCurrentTrackTitle = () => { const t = app.currentTrack(); return t ? app.trackTitle(t) : ''; };
+  pl.playtrack = (i) => { if (browsing()) { app.browser.sel = i; app.browser.activate(i); } else app.playIndex(i); };
+  pl.clear = () => { if (!browsing()) app.clearPlaylist(); };
+  pl.removetrack = (i) => { if (!browsing()) app.removeIndices([i]); };
   pl.enqueuefile = (f) => app.addTracks([f]);
   pl.addTrack = (t) => app.addTracks([t.file ? R.pathForFile(t.file) : t.filename]);
   const move = (from, to) => {
+    if (browsing()) return;
     const list = app.state.playlist; if (from < 0 || to < 0 || from >= list.length || to >= list.length) return;
     const cur = app.currentTrack(); const [x] = list.splice(from, 1); list.splice(to, 0, x);
     app.state.current = cur ? list.indexOf(cur) : -1; app.changed();
@@ -167,7 +194,7 @@
   pl.moveup = (i) => move(i, i - 1);
   pl.movedown = (i) => move(i, i + 1);
   pl.moveto = (i, pos) => move(i, pos);
-  pl.swaptracks = (a, b) => { const l = app.state.playlist; if (!l[a] || !l[b]) return; const cur = app.currentTrack(); [l[a], l[b]] = [l[b], l[a]]; app.state.current = cur ? l.indexOf(cur) : -1; app.changed(); };
+  pl.swaptracks = (a, b) => { if (browsing()) return; const l = app.state.playlist; if (!l[a] || !l[b]) return; const cur = app.currentTrack(); [l[a], l[b]] = [l[b], l[a]]; app.state.current = cur ? l.indexOf(cur) : -1; app.changed(); };
   sync();
   setInterval(sync, 300);
 
